@@ -1,12 +1,16 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Navigation } from "./Navigation"
-import { LegalBanner } from "./LegalBanner"
 import { DisclaimerModal } from "./DisclaimerModal"
-import { TrendingUp, Shield, Zap, ArrowRight, CheckCircle, FileText, ExternalLink } from "lucide-react"
+import { Logo } from "./Logo"
+import { WalletConnectButton } from "./WalletConnectButton"
+import { useWalletAuth } from "@/hooks/useWalletAuth"
+import { useWallet } from '@solana/wallet-adapter-react'
+import { ClientOnly } from "./ClientOnly"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { TrendingUp, Shield, Zap, ArrowRight, CheckCircle, FileText, ExternalLink, Menu, LogOut } from "lucide-react"
 
 interface LandingPageProps {
   onGetStarted: () => void
@@ -15,20 +19,177 @@ interface LandingPageProps {
 
 export function LandingPage({ onGetStarted, onNavigate }: LandingPageProps) {
   const [showDisclaimer, setShowDisclaimer] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { connected } = useWallet()
+  const { isAuthenticated, user, hasProfile, hasPortfolio, signOut, manualAuth } = useWalletAuth()
 
-  const handleGetStarted = () => {
-    setShowDisclaimer(true)
+  // Auto-navigate when user gets authenticated and has profile
+  useEffect(() => {
+    if (isAuthenticated && hasProfile && hasPortfolio) {
+      console.log('🚀 User authenticated with portfolio, checking onboarding status...', { 
+        user: user?.id,
+        hasProfile,
+        hasPortfolio
+      })
+      
+      // Wait a bit then navigate to dashboard
+      setTimeout(() => {
+        console.log('✅ User has completed onboarding, going to dashboard')
+        onNavigate("dashboard")
+      }, 1500)
+    }
+  }, [isAuthenticated, hasProfile, hasPortfolio, onNavigate])
+
+  const handleGetStarted = async () => {
+    if (isAuthenticated) {
+      if (hasProfile && hasPortfolio) {
+        // User has completed onboarding, go to dashboard
+        onNavigate("dashboard")
+      } else {
+        // User needs onboarding, show terms modal
+        setShowDisclaimer(true)
+      }
+    } else if (connected) {
+      // Wallet is connected but not authenticated, trigger authentication
+      console.log('🔐 Wallet connected, triggering authentication...')
+      await manualAuth()
+    } else {
+      // User needs to connect wallet first, show disclaimer
+      setShowDisclaimer(true)
+    }
   }
 
   const handleDisclaimerAccept = () => {
     setShowDisclaimer(false)
+    // After accepting disclaimer, proceed to onboarding
     onGetStarted()
+  }
+
+  const handleSignOut = async () => {
+    await signOut()
+    setMobileMenuOpen(false)
   }
 
   return (
     <div className="min-h-screen bg-white">
-      <LegalBanner />
-      <Navigation currentPage="landing" onNavigate={onNavigate} />
+      {/* Simple Header Navigation */}
+      <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <Logo />
+            
+            {/* Desktop Navigation */}
+            <div className="hidden md:flex items-center space-x-4">
+              {/* Show Login button when wallet is connected but not authenticated */}
+              {connected && !isAuthenticated && (
+                <Button 
+                  onClick={manualAuth}
+                  variant="outline"
+                  className="text-gray-700 hover:text-gray-900"
+                >
+                  Login
+                </Button>
+              )}
+              
+              {/* Show Dashboard if user has completed onboarding */}
+              {isAuthenticated && hasProfile && hasPortfolio && (
+                <Button 
+                  onClick={() => onNavigate("dashboard")}
+                  variant="ghost" 
+                  className="text-gray-700 hover:text-gray-900"
+                >
+                  Dashboard
+                </Button>
+              )}
+              
+              {/* Show Get Started if user needs onboarding */}
+              {isAuthenticated && (!hasProfile || !hasPortfolio) && (
+                <Button 
+                  onClick={handleGetStarted}
+                  variant="ghost"
+                  className="text-gray-700 hover:text-gray-900"
+                >
+                  Get Started
+                </Button>
+              )}
+              
+              {/* Always show wallet connect button */}
+              <ClientOnly fallback={<div className="w-32 h-10 bg-gray-200 animate-pulse rounded"></div>}>
+                <WalletConnectButton />
+              </ClientOnly>
+            </div>
+
+            {/* Mobile Menu */}
+            <div className="md:hidden">
+              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-80">
+                  <div className="flex flex-col space-y-4 mt-8">
+                    {/* Always show wallet connection */}
+                    <div className="pb-4 border-b border-gray-200">
+                      <div className="text-sm font-medium text-gray-900 mb-3">Wallet Connection</div>
+                      <ClientOnly fallback={<div className="w-full h-10 bg-gray-200 animate-pulse rounded"></div>}>
+                        <WalletConnectButton />
+                      </ClientOnly>
+                    </div>
+                    
+                    {/* Show Login button when wallet is connected but not authenticated */}
+                    {connected && !isAuthenticated && (
+                      <Button 
+                        onClick={() => {
+                          manualAuth()
+                          setMobileMenuOpen(false)
+                        }}
+                        variant="outline"
+                        className="justify-start"
+                      >
+                        Login
+                      </Button>
+                    )}
+                    
+                    {/* Show navigation when authenticated */}
+                    {isAuthenticated && (
+                      <>
+                        {/* Show Dashboard if user has completed onboarding */}
+                        {hasProfile && hasPortfolio && (
+                          <Button 
+                            onClick={() => {
+                              onNavigate("dashboard")
+                              setMobileMenuOpen(false)
+                            }}
+                            variant="ghost"
+                            className="justify-start"
+                          >
+                            Dashboard
+                          </Button>
+                        )}
+                        
+                        {/* Show Get Started if user needs onboarding */}
+                        {(!hasProfile || !hasPortfolio) && (
+                          <Button 
+                            onClick={() => {
+                              handleGetStarted()
+                              setMobileMenuOpen(false)
+                            }}
+                            variant="ghost"
+                            className="justify-start"
+                          >
+                            Get Started
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
+          </div>
+        </div>
+      </nav>
 
       {/* Hero Section */}
       <section className="relative bg-gray-900 text-white">
@@ -46,15 +207,45 @@ export function LandingPage({ onGetStarted, onNavigate }: LandingPageProps) {
               Select a risk level to automatically diversify your portfolio with tokenized S&P 500 stocks. Professional
               portfolio management on Solana blockchain.
             </p>
-
+            
+            {/* Show wallet connection status */}
+            {connected && !isAuthenticated && (
+              <div className="mb-8 p-4 bg-amber-900/20 border border-amber-600/30 rounded-lg">
+                <div className="flex items-center gap-3 text-amber-200">
+                  <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
+                  <span className="text-sm">Wallet connected, authenticating...</span>
+                </div>
+              </div>
+            )}
+            
+            {isAuthenticated && !hasProfile && (
+              <div className="mb-8 p-4 bg-green-900/20 border border-green-600/30 rounded-lg">
+                <div className="flex items-center gap-3 text-green-200">
+                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                  <span className="text-sm">✓ Authenticated! Ready to get started.</span>
+                </div>
+              </div>
+            )}
+            
             <div className="flex flex-col sm:flex-row gap-6 mb-16">
-              <Button size="lg" className="btn-primary text-lg px-8 py-4" onClick={handleGetStarted}>
-                SET RISK PROFILE
-                <ArrowRight className="ml-3 h-5 w-5" />
+              <Button 
+                size="lg" 
+                className="btn-primary text-xl px-12 py-6 font-bold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105" 
+                onClick={handleGetStarted}
+              >
+                {isAuthenticated 
+                  ? (hasProfile && hasPortfolio ? "GO TO DASHBOARD" : "COMPLETE SETUP")
+                  : "GET STARTED NOW"
+                }
+                <ArrowRight className="ml-3 h-6 w-6" />
               </Button>
-              <Button size="lg" variant="outline" className="btn-secondary text-lg px-8 py-4 bg-transparent">
+              <Button 
+                size="lg" 
+                variant="outline" 
+                className="btn-secondary text-xl px-12 py-6 bg-transparent border-2 border-gray-300 hover:border-gray-400 transition-all duration-200"
+              >
                 VIEW DOCUMENTATION
-                <FileText className="ml-3 h-5 w-5" />
+                <FileText className="ml-3 h-6 w-6" />
               </Button>
             </div>
 

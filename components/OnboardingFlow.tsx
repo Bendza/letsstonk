@@ -2,353 +2,449 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
+import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Wallet, Settings, DollarSign, CheckCircle, ArrowRight, ArrowLeft, AlertTriangle } from "lucide-react"
-import { MockWalletButton } from "./MockWalletButton"
-import { useMockWallet } from "./MockWalletProvider"
-import { getAllocationForRisk } from "../lib/risk-engine"
+import { ArrowRight, ArrowLeft, TrendingUp, Shield, Target, CheckCircle, Loader2 } from "lucide-react"
+import { WalletConnectButton } from "./WalletConnectButton"
+import { useWallet } from '@solana/wallet-adapter-react'
+import { useWalletAuth } from '@/hooks/useWalletAuth'
+
+export interface OnboardingData {
+  riskTolerance: number
+  initialInvestment: number
+  portfolioName: string
+  rebalanceFrequency: "daily" | "weekly" | "monthly"
+  autoRebalance: boolean
+}
 
 interface OnboardingFlowProps {
   onComplete: (data: OnboardingData) => void
   onBack: () => void
 }
 
-export interface OnboardingData {
-  walletAddress: string
-  riskLevel: number
-  initialInvestment: number
-  autoRebalance: boolean
-}
-
-const steps = [
-  { id: 1, title: "Connect Wallet", icon: Wallet },
-  { id: 2, title: "Set Risk Profile", icon: Settings },
-  { id: 3, title: "Initial Investment", icon: DollarSign },
-  { id: 4, title: "Review & Confirm", icon: CheckCircle },
-]
-
 export function OnboardingFlow({ onComplete, onBack }: OnboardingFlowProps) {
-  const [currentStep, setCurrentStep] = useState(1)
-  const [riskLevel, setRiskLevel] = useState(7)
-  const [initialInvestment, setInitialInvestment] = useState("")
-  const [autoRebalance, setAutoRebalance] = useState(true)
+  const [currentStep, setCurrentStep] = useState(0)
+  const [isCreating, setIsCreating] = useState(false)
+  const [formData, setFormData] = useState<OnboardingData>({
+    riskTolerance: 5,
+    initialInvestment: 1000,
+    portfolioName: "My Portfolio",
+    rebalanceFrequency: "weekly",
+    autoRebalance: true,
+  })
 
-  const { connected, publicKey } = useMockWallet()
+  const { connected, publicKey } = useWallet()
+  const { isAuthenticated, createUserProfile } = useWalletAuth()
 
-  const progress = (currentStep / steps.length) * 100
-  const allocation = getAllocationForRisk(riskLevel)
-  const investmentAmount = Number.parseFloat(initialInvestment) || 0
+  const steps = [
+    {
+      title: "Connect & Authenticate",
+      description: "Connect your Solana wallet and authenticate",
+      component: ConnectWalletStep,
+    },
+    {
+      title: "Risk Assessment",
+      description: "Set your risk tolerance level",
+      component: RiskToleranceStep,
+    },
+    {
+      title: "Investment Amount",
+      description: "Choose your initial investment",
+      component: InvestmentStep,
+    },
+    {
+      title: "Portfolio Setup",
+      description: "Configure your portfolio settings",
+      component: PortfolioSetupStep,
+    },
+    {
+      title: "Review & Confirm",
+      description: "Review your settings and confirm",
+      component: ReviewStep,
+    },
+  ]
 
-  const handleNext = () => {
-    if (currentStep < steps.length) {
+  const handleNext = async () => {
+    if (currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1)
+    } else {
+      // Final step - create user profile and portfolio
+      setIsCreating(true)
+      try {
+        await createUserProfile(formData.riskTolerance, formData.initialInvestment)
+        onComplete(formData)
+      } catch (error) {
+        console.error('Error creating user profile:', error)
+        // Handle error - maybe show a toast or error message
+      } finally {
+        setIsCreating(false)
+      }
     }
   }
 
-  const handlePrevious = () => {
-    if (currentStep > 1) {
+  const handleBack = () => {
+    if (currentStep > 0) {
       setCurrentStep(currentStep - 1)
-    }
-  }
-
-  const handleComplete = () => {
-    if (connected && publicKey) {
-      onComplete({
-        walletAddress: publicKey.toString(),
-        riskLevel,
-        initialInvestment: investmentAmount,
-        autoRebalance,
-      })
+    } else {
+      onBack()
     }
   }
 
   const canProceed = () => {
     switch (currentStep) {
+      case 0:
+        return connected && isAuthenticated
       case 1:
-        return connected
+        return formData.riskTolerance >= 1 && formData.riskTolerance <= 10
       case 2:
-        return riskLevel >= 1 && riskLevel <= 10
+        return formData.initialInvestment >= 1
       case 3:
-        return investmentAmount >= 1 && investmentAmount <= 1000000
-      case 4:
-        return true
+        return formData.portfolioName.trim().length > 0
       default:
-        return false
+        return true
     }
   }
 
-  const currentStepIcon = steps[currentStep - 1].icon
-  const currentStepTitle = steps[currentStep - 1].title
+  const CurrentStepComponent = steps[currentStep].component
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-6 max-w-4xl">
-        {/* Header */}
-        <div className="text-center py-12">
-          <Button variant="ghost" onClick={onBack} className="absolute left-6 top-12 btn-secondary">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            BACK TO HOME
+    <div className="min-h-screen bg-gray-50 py-12">
+      <div className="container mx-auto px-6">
+        <div className="max-w-2xl mx-auto">
+          {/* Progress Header */}
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-4">
+              Portfolio Setup
+            </h1>
+            <div className="flex items-center justify-center space-x-2 mb-4">
+              {steps.map((_, index) => (
+                <div
+                  key={index}
+                  className={`w-3 h-3 rounded-full ${
+                    index <= currentStep ? "bg-blue-600" : "bg-gray-300"
+                  }`}
+                />
+              ))}
+            </div>
+            <Progress value={((currentStep + 1) / steps.length) * 100} className="w-full" />
+            <p className="text-sm text-gray-600 mt-2">
+              Step {currentStep + 1} of {steps.length}
+            </p>
+          </div>
+
+          {/* Step Content */}
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <span className="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">
+                  {currentStep + 1}
+                </span>
+                {steps[currentStep].title}
+              </CardTitle>
+              <CardDescription>
+                {steps[currentStep].description}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CurrentStepComponent
+                formData={formData}
+                setFormData={setFormData}
+                connected={connected}
+                publicKey={publicKey}
+                isAuthenticated={isAuthenticated}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Navigation */}
+          <div className="flex justify-between">
+            <Button
+              variant="outline"
+              onClick={handleBack}
+              className="flex items-center"
+              disabled={isCreating}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+            <Button
+              onClick={handleNext}
+              disabled={!canProceed() || isCreating}
+              className="flex items-center"
+            >
+              {isCreating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating Profile...
+                </>
+              ) : (
+                <>
+                  {currentStep === steps.length - 1 ? "Complete Setup" : "Next"}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Step Components
+function ConnectWalletStep({ connected, publicKey, isAuthenticated }: any) {
+  return (
+    <div className="space-y-6">
+      <div className="text-center">
+        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Shield className="h-8 w-8 text-blue-600" />
+        </div>
+        <h3 className="text-lg font-semibold mb-2">Secure Wallet Connection</h3>
+        <p className="text-gray-600 mb-6">
+          Connect your Solana wallet and authenticate to access SolStock's automated trading features
+        </p>
+      </div>
+
+      <div className="flex justify-center">
+        <WalletConnectButton />
+      </div>
+
+      {connected && !isAuthenticated && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <Shield className="h-5 w-5 text-yellow-600 mr-2" />
+            <span className="text-yellow-800 font-medium">Wallet Connected - Please Authenticate</span>
+          </div>
+          <p className="text-yellow-700 text-sm mt-1">
+            Click the "Authenticate" button above to complete the connection
+          </p>
+        </div>
+      )}
+
+      {connected && isAuthenticated && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+            <span className="text-green-800 font-medium">Wallet Connected & Authenticated</span>
+          </div>
+          <p className="text-green-700 text-sm mt-1">
+            {publicKey?.toString().slice(0, 8)}...{publicKey?.toString().slice(-8)}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RiskToleranceStep({ formData, setFormData }: any) {
+  const riskLevels = [
+    { level: 1, label: "Very Conservative", description: "Minimal risk, stable returns" },
+    { level: 3, label: "Conservative", description: "Low risk, steady growth" },
+    { level: 5, label: "Moderate", description: "Balanced risk and return" },
+    { level: 7, label: "Aggressive", description: "Higher risk, higher potential returns" },
+    { level: 10, label: "Very Aggressive", description: "Maximum risk, maximum potential" },
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center">
+        <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Target className="h-8 w-8 text-orange-600" />
+        </div>
+        <h3 className="text-lg font-semibold mb-2">Risk Assessment</h3>
+        <p className="text-gray-600">
+          Choose your risk tolerance level to optimize your portfolio allocation
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <Label htmlFor="risk-slider" className="text-base font-medium">
+          Risk Level: {formData.riskTolerance}
+        </Label>
+        <Slider
+          id="risk-slider"
+          min={1}
+          max={10}
+          step={1}
+          value={[formData.riskTolerance]}
+          onValueChange={(value) => setFormData({ ...formData, riskTolerance: value[0] })}
+          className="w-full"
+        />
+        <div className="flex justify-between text-xs text-gray-500">
+          <span>Conservative</span>
+          <span>Aggressive</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {riskLevels.map((risk) => (
+          <div
+            key={risk.level}
+            className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+              formData.riskTolerance === risk.level
+                ? "border-blue-500 bg-blue-50"
+                : "border-gray-200 hover:border-gray-300"
+            }`}
+            onClick={() => setFormData({ ...formData, riskTolerance: risk.level })}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-medium">{risk.label}</span>
+              <Badge variant={formData.riskTolerance === risk.level ? "default" : "secondary"}>
+                {risk.level}
+              </Badge>
+            </div>
+            <p className="text-sm text-gray-600">{risk.description}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function InvestmentStep({ formData, setFormData }: any) {
+  const presetAmounts = [100, 500, 1000, 5000, 10000]
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center">
+        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <TrendingUp className="h-8 w-8 text-green-600" />
+        </div>
+        <h3 className="text-lg font-semibold mb-2">Initial Investment</h3>
+        <p className="text-gray-600">
+          Set your initial investment amount in USDC
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <Label htmlFor="investment-amount" className="text-base font-medium">
+          Investment Amount (USDC)
+        </Label>
+        <Input
+          id="investment-amount"
+          type="number"
+          value={formData.initialInvestment}
+          onChange={(e) => setFormData({ ...formData, initialInvestment: Number(e.target.value) })}
+          placeholder="Enter amount"
+          className="text-lg"
+        />
+      </div>
+
+      <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+        {presetAmounts.map((amount) => (
+          <Button
+            key={amount}
+            variant={formData.initialInvestment === amount ? "default" : "outline"}
+            onClick={() => setFormData({ ...formData, initialInvestment: amount })}
+            className="text-sm"
+          >
+            ${amount}
           </Button>
-          <h1 className="text-4xl font-bold mb-4 tracking-tight">SETUP YOUR INVESTMENT ACCOUNT</h1>
-          <p className="text-gray-600">Complete these steps to start automated investing</p>
+        ))}
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <p className="text-blue-800 text-sm">
+          <strong>Note:</strong> You can add more funds to your portfolio at any time after setup.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function PortfolioSetupStep({ formData, setFormData }: any) {
+  return (
+    <div className="space-y-6">
+      <div className="text-center">
+        <h3 className="text-lg font-semibold mb-2">Portfolio Configuration</h3>
+        <p className="text-gray-600">
+          Configure your portfolio name and rebalancing preferences
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <Label htmlFor="portfolio-name" className="text-base font-medium">
+            Portfolio Name
+          </Label>
+          <Input
+            id="portfolio-name"
+            value={formData.portfolioName}
+            onChange={(e) => setFormData({ ...formData, portfolioName: e.target.value })}
+            placeholder="Enter portfolio name"
+          />
         </div>
 
-        {/* Progress Bar */}
-        <div className="mb-12">
-          <Progress value={progress} className="h-1 mb-8 bg-gray-200" />
-          <div className="flex justify-between">
-            {steps.map((step) => (
-              <div
-                key={step.id}
-                className={`flex items-center gap-3 ${step.id <= currentStep ? "text-gray-900" : "text-gray-400"}`}
+        <div>
+          <Label className="text-base font-medium mb-3 block">
+            Rebalancing Frequency
+          </Label>
+          <div className="grid grid-cols-3 gap-3">
+            {["daily", "weekly", "monthly"].map((freq) => (
+              <Button
+                key={freq}
+                variant={formData.rebalanceFrequency === freq ? "default" : "outline"}
+                onClick={() => setFormData({ ...formData, rebalanceFrequency: freq })}
+                className="capitalize"
               >
-                <div
-                  className={`w-10 h-10 flex items-center justify-center font-bold ${
-                    step.id <= currentStep ? "bg-gray-900 text-white" : "bg-gray-200 text-gray-400"
-                  }`}
-                >
-                  {step.id < currentStep ? <CheckCircle className="h-5 w-5" /> : step.id}
-                </div>
-                <span className="hidden sm:block font-semibold uppercase tracking-wide text-sm">{step.title}</span>
-              </div>
+                {freq}
+              </Button>
             ))}
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
 
-        {/* Step Content */}
-        <Card className="minimal-card mb-12">
-          <CardHeader className="border-b border-gray-200">
-            <CardTitle className="flex items-center gap-3 heading-lg">
-              <currentStepIcon className="h-6 w-6" />
-              {currentStepTitle.toUpperCase()}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-8">
-            {/* Step 1: Connect Wallet */}
-            {currentStep === 1 && (
-              <div className="text-center space-y-8">
-                <div>
-                  <h3 className="heading-lg mb-4">CONNECT YOUR SOLANA WALLET</h3>
-                  <p className="body-md text-gray-600 mb-8">
-                    Connect your wallet to securely manage your investments on Solana
-                  </p>
-                </div>
+function ReviewStep({ formData, connected, publicKey }: any) {
+  return (
+    <div className="space-y-6">
+      <div className="text-center">
+        <h3 className="text-lg font-semibold mb-2">Review Your Settings</h3>
+        <p className="text-gray-600">
+          Please review your portfolio configuration before proceeding
+        </p>
+      </div>
 
-                <MockWalletButton />
+      <div className="space-y-4">
+        <div className="bg-gray-50 rounded-lg p-4">
+          <h4 className="font-medium mb-3">Portfolio Summary</h4>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span>Portfolio Name:</span>
+              <span className="font-medium">{formData.portfolioName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Risk Level:</span>
+              <span className="font-medium">{formData.riskTolerance}/10</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Initial Investment:</span>
+              <span className="font-medium">${formData.initialInvestment} USDC</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Rebalancing:</span>
+              <span className="font-medium capitalize">{formData.rebalanceFrequency}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Wallet:</span>
+              <span className="font-medium font-mono">
+                {publicKey ? `${publicKey.toString().slice(0, 8)}...${publicKey.toString().slice(-8)}` : 'Not connected'}
+              </span>
+            </div>
+          </div>
+        </div>
 
-                {connected && (
-                  <Alert className="border-gray-900 bg-gray-50 max-w-md mx-auto">
-                    <CheckCircle className="h-4 w-4 text-gray-900" />
-                    <AlertDescription className="text-gray-900 font-semibold">
-                      WALLET CONNECTED SUCCESSFULLY
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </div>
-            )}
-
-            {/* Step 2: Risk Profile */}
-            {currentStep === 2 && (
-              <div className="space-y-8">
-                <div className="text-center">
-                  <h3 className="heading-lg mb-4">SET YOUR RISK PROFILE</h3>
-                  <p className="body-md text-gray-600">
-                    Choose your risk tolerance to automatically diversify your portfolio
-                  </p>
-                </div>
-
-                <div className="max-w-2xl mx-auto">
-                  <div className="bg-gray-50 p-8 mb-8">
-                    <div className="flex items-center justify-between mb-6">
-                      <Label className="font-semibold">RISK LEVEL</Label>
-                      <div className="text-2xl font-bold">{riskLevel}</div>
-                    </div>
-
-                    <div className="relative mb-6">
-                      <Slider
-                        value={[riskLevel]}
-                        onValueChange={(value) => setRiskLevel(value[0])}
-                        max={10}
-                        min={1}
-                        step={1}
-                        className="w-full"
-                      />
-                      <div className="flex justify-between text-xs text-gray-500 mt-2">
-                        <span>CONSERVATIVE</span>
-                        <span>AGGRESSIVE</span>
-                      </div>
-                    </div>
-
-                    <Button className="btn-primary w-full">SET RISK PROFILE</Button>
-                  </div>
-
-                  {/* Portfolio Preview */}
-                  <div className="minimal-card p-6">
-                    <h4 className="font-semibold mb-4 uppercase tracking-wide">PORTFOLIO ALLOCATION</h4>
-                    <div className="space-y-3">
-                      {allocation.map((item) => (
-                        <div
-                          key={item.symbol}
-                          className="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0"
-                        >
-                          <span className="font-semibold">{item.symbol}</span>
-                          <span className="text-gray-600">{item.percentage}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Initial Investment */}
-            {currentStep === 3 && (
-              <div className="space-y-8">
-                <div className="text-center">
-                  <h3 className="heading-lg mb-4">INITIAL INVESTMENT AMOUNT</h3>
-                  <p className="body-md text-gray-600">Enter the amount of USDC you want to invest initially</p>
-                </div>
-
-                <div className="max-w-md mx-auto">
-                  <div className="bg-gray-50 p-8 mb-8">
-                    <Label htmlFor="investment" className="font-semibold mb-4 block">
-                      INVESTMENT AMOUNT
-                    </Label>
-                    <div className="relative mb-6">
-                      <Input
-                        id="investment"
-                        type="number"
-                        placeholder="500"
-                        value={initialInvestment}
-                        onChange={(e) => setInitialInvestment(e.target.value)}
-                        min="1"
-                        max="1000000"
-                        step="0.01"
-                        className="form-input text-center text-2xl font-bold py-4"
-                      />
-                      <div className="text-center text-sm text-gray-500 mt-2">USDC</div>
-                    </div>
-                    <Button className="btn-primary w-full">INVEST NOW</Button>
-                  </div>
-
-                  {investmentAmount > 0 && (
-                    <div className="minimal-card p-6">
-                      <h4 className="font-semibold mb-4 uppercase tracking-wide">INVESTMENT BREAKDOWN</h4>
-                      <div className="space-y-3">
-                        {allocation.map((item) => (
-                          <div
-                            key={item.symbol}
-                            className="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0"
-                          >
-                            <span className="font-semibold">{item.symbol}</span>
-                            <span className="font-semibold">
-                              ${((investmentAmount * item.percentage) / 100).toFixed(2)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Step 4: Review & Confirm */}
-            {currentStep === 4 && (
-              <div className="space-y-8">
-                <div className="text-center">
-                  <h3 className="heading-lg mb-4">REVIEW YOUR SETUP</h3>
-                  <p className="body-md text-gray-600">Please review your investment configuration before proceeding</p>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-                  <Card className="minimal-card">
-                    <CardHeader className="border-b border-gray-200">
-                      <CardTitle className="heading-md">ACCOUNT DETAILS</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-6 space-y-4">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Wallet:</span>
-                        <span className="font-mono text-sm">
-                          {publicKey?.toString().slice(0, 8)}...{publicKey?.toString().slice(-8)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Risk Level:</span>
-                        <span className="font-semibold">{riskLevel}/10</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Investment:</span>
-                        <span className="font-semibold">${investmentAmount.toFixed(2)} USDC</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="minimal-card">
-                    <CardHeader className="border-b border-gray-200">
-                      <CardTitle className="heading-md">PORTFOLIO ALLOCATION</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-6">
-                      <div className="space-y-3">
-                        {allocation.map((item) => (
-                          <div
-                            key={item.symbol}
-                            className="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0"
-                          >
-                            <span className="font-semibold">{item.symbol}</span>
-                            <div className="text-right">
-                              <div className="font-semibold">
-                                ${((investmentAmount * item.percentage) / 100).toFixed(2)}
-                              </div>
-                              <div className="text-sm text-gray-500">{item.percentage}%</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <Alert className="border-gray-300 bg-gray-50 max-w-4xl mx-auto">
-                  <AlertTriangle className="h-4 w-4 text-gray-600" />
-                  <AlertDescription className="text-gray-700">
-                    <strong>IMPORTANT:</strong> By proceeding, you acknowledge that xStocks are tokenized securities
-                    issued by Backed Finance and are subject to regulatory restrictions.
-                  </AlertDescription>
-                </Alert>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Navigation Buttons */}
-        <div className="flex justify-between pb-12">
-          <Button
-            variant="outline"
-            onClick={handlePrevious}
-            disabled={currentStep === 1}
-            className="btn-secondary bg-transparent"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            PREVIOUS
-          </Button>
-
-          {currentStep < steps.length ? (
-            <Button onClick={handleNext} disabled={!canProceed()} className="btn-primary">
-              NEXT
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-          ) : (
-            <Button onClick={handleComplete} disabled={!canProceed()} className="btn-primary">
-              COMPLETE SETUP
-              <CheckCircle className="h-4 w-4 ml-2" />
-            </Button>
-          )}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <p className="text-blue-800 text-sm">
+            <strong>Ready to start!</strong> Your portfolio will be created with these settings. 
+            You can modify them later in the settings page.
+          </p>
         </div>
       </div>
     </div>

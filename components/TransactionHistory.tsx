@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Navigation } from "./Navigation"
 import {
   Search,
   Filter,
@@ -163,10 +162,8 @@ export function TransactionHistory({ onNavigate, onLogout }: TransactionHistoryP
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation currentPage="history" onNavigate={onNavigate} onLogout={onLogout} />
-
-      <div className="container mx-auto px-6 py-8">
+    <div className="w-full">
+      <div className="px-6 py-8">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-8">
           <div>

@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Navigation } from "./Navigation"
 import {
   TrendingUp,
   TrendingDown,
@@ -19,7 +18,12 @@ import {
   Activity,
   Percent,
   Download,
+  RefreshCw,
+  AlertCircle,
 } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { usePortfolio } from "@/hooks/usePortfolio"
+import { useWalletAuth } from "@/hooks/useWalletAuth"
 import {
   LineChart,
   Line,
@@ -43,6 +47,20 @@ interface PortfolioProps {
 }
 
 const COLORS = ["#374151", "#4B5563", "#6B7280", "#9CA3AF", "#D1D5DB"]
+
+// Helper function to get stock logos
+function getStockLogo(symbol: string): string {
+  const logoMap: Record<string, string> = {
+    'xTSLA': '🚗',
+    'xAAPL': '🍎', 
+    'xMSFT': '💻',
+    'xGOOGL': '🔍',
+    'xAMZN': '📦',
+    'xNVDA': '🎮',
+    'xMETA': '👥',
+  }
+  return logoMap[symbol] || '📈'
+}
 
 // Mock performance data
 const performanceData = [
@@ -70,24 +88,38 @@ const sectorData = [
 
 export function Portfolio({ onboardingData, onNavigate, onLogout }: PortfolioProps) {
   const [timeframe, setTimeframe] = useState("1Y")
-  const [currentValue] = useState(1480)
+  const [syncing, setSyncing] = useState(false)
 
-  const allocation = getAllocationForRisk(onboardingData.riskLevel)
-  const totalReturn = currentValue - onboardingData.initialInvestment
-  const totalReturnPercent = (totalReturn / onboardingData.initialInvestment) * 100
+  // Use real portfolio data from Supabase
+  const { portfolio, loading, error, refetch, syncPortfolio } = usePortfolio(onboardingData.walletAddress)
 
-  // Mock positions based on allocation
-  const positions = allocation.map((item, index) => ({
-    symbol: item.symbol,
-    name: item.symbol.replace("x", ""),
-    shares: Math.floor((currentValue * item.percentage) / 100 / (200 + index * 50)),
-    avgPrice: 180 + index * 40,
-    currentPrice: 200 + index * 50,
-    value: (currentValue * item.percentage) / 100,
-    change: (Math.random() - 0.5) * 20,
-    changePercent: (Math.random() - 0.5) * 8,
-    allocation: item.percentage,
-    logo: ["🚗", "🍎", "💻", "🔍", "📦"][index] || "📈",
+  const handleSync = async () => {
+    setSyncing(true)
+    try {
+      await syncPortfolio()
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  // Calculate portfolio metrics from real data
+  const currentValue = portfolio?.total_value || 0
+  const initialInvestment = portfolio?.initial_investment || onboardingData.initialInvestment
+  const totalReturn = portfolio?.current_pnl || 0
+  const totalReturnPercent = portfolio?.pnl_percentage || 0
+
+  // Convert database positions to display format
+  const positions = (portfolio?.positions || []).map((position) => ({
+    symbol: position.symbol,
+    name: position.symbol.replace("x", ""),
+    shares: position.amount,
+    avgPrice: position.average_price,
+    currentPrice: position.current_price,
+    value: position.value,
+    change: position.pnl,
+    changePercent: position.pnl_percentage,
+    allocation: position.current_percentage,
+    logo: getStockLogo(position.symbol),
   }))
 
   const pieData = positions.map((pos, index) => ({
@@ -105,18 +137,62 @@ export function Portfolio({ onboardingData, onNavigate, onLogout }: PortfolioPro
     winRate: 68,
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation currentPage="portfolio" onNavigate={onNavigate} onLogout={onLogout} />
+  // Loading state
+  if (loading) {
+    return (
+      <div className="w-full flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-lg text-gray-600">Loading portfolio data...</p>
+        </div>
+      </div>
+    )
+  }
 
-      <div className="container mx-auto px-6 py-8">
+  return (
+    <div className="w-full">
+      <div className="px-6 py-8">
+        {/* Error Alert */}
+        {error && (
+          <Alert className="mb-6 border-red-200 bg-red-50">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              {error}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* No Portfolio Alert */}
+        {!portfolio && !loading && (
+          <Alert className="mb-6 border-blue-200 bg-blue-50">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              No portfolio found. Complete the onboarding process to create your portfolio.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-8">
           <div>
             <h1 className="text-4xl font-bold mb-2 tracking-tight">PORTFOLIO ANALYSIS</h1>
             <p className="text-gray-600 text-lg">Detailed performance metrics and holdings breakdown</p>
+            {portfolio && (
+              <p className="text-sm text-gray-500 mt-1">
+                Last updated: {new Date(portfolio.updated_at).toLocaleString()}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-4 mt-4 lg:mt-0">
+            <Button 
+              variant="outline" 
+              onClick={handleSync}
+              disabled={syncing}
+              className="btn-secondary bg-transparent"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'SYNCING...' : 'SYNC'}
+            </Button>
             <Select value={timeframe} onValueChange={setTimeframe}>
               <SelectTrigger className="w-32">
                 <SelectValue />

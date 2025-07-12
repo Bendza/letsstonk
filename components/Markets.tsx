@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Navigation } from "./Navigation"
 import {
   Search,
   TrendingUp,
@@ -165,10 +164,8 @@ export function Markets({ onNavigate, onLogout, onTradeStock }: MarketsProps) {
     .slice(0, 3)
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation currentPage="markets" onNavigate={onNavigate} onLogout={onLogout} />
-
-      <div className="container mx-auto px-6 py-8">
+    <div className="w-full">
+      <div className="px-6 py-8">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-4 tracking-tight">STOCK MARKETS</h1>

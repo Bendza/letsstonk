@@ -2,207 +2,147 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Separator } from "@/components/ui/separator"
+import { ChevronDown, ChevronUp, TrendingUp, TrendingDown, DollarSign, PieChart, BarChart3, History, Settings, Home, ShoppingCart, LogOut, Wallet } from "lucide-react"
 import { Logo } from "./Logo"
-import { MockWalletButton } from "./MockWalletButton"
-import { useMockWallet } from "./MockWalletProvider"
-import {
-  Menu,
-  Home,
-  BarChart3,
-  Settings,
-  HelpCircle,
-  LogOut,
-  Bell,
-  ChevronDown,
-  TrendingUp,
-  PieChart,
-  History,
-  Target,
-} from "lucide-react"
+import { WalletConnectButton } from "./WalletConnectButton"
+import { useWallet } from '@solana/wallet-adapter-react'
 
-interface NavigationProps {
-  currentPage: "landing" | "dashboard" | "markets" | "portfolio" | "analytics" | "history" | "settings" | "onboarding"
-  onNavigate: (page: "landing" | "dashboard" | "markets" | "portfolio" | "analytics" | "history" | "settings") => void
-  onLogout?: () => void
+type NavigationProps = {
+  currentPage: "landing" | "onboarding" | "dashboard" | "markets" | "portfolio" | "analytics" | "history" | "settings"
+  onNavigate: (page: "landing" | "onboarding" | "dashboard" | "markets" | "portfolio" | "analytics" | "history" | "settings") => void
+  onLogout: () => void
 }
 
 export function Navigation({ currentPage, onNavigate, onLogout }: NavigationProps) {
-  const { connected, publicKey } = useMockWallet()
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-
-  const navItems = [
-    { label: "HOME", href: "landing", icon: Home },
-    { label: "DASHBOARD", href: "dashboard", icon: BarChart3, requiresAuth: true },
-    { label: "MARKETS", href: "markets", icon: TrendingUp, requiresAuth: true },
-    { label: "PORTFOLIO", href: "portfolio", icon: PieChart, requiresAuth: true },
-    { label: "ANALYTICS", href: "analytics", icon: Target, requiresAuth: true },
-    { label: "HISTORY", href: "history", icon: History, requiresAuth: true },
-    { label: "SETTINGS", href: "settings", icon: Settings, requiresAuth: true },
-    { label: "HELP", href: "#", icon: HelpCircle },
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [showPortfolioDetails, setShowPortfolioDetails] = useState(false)
+  
+  // Mock portfolio data
+  const portfolioValue = 12500
+  const portfolioChange = 850
+  const portfolioChangePercent = 7.3
+  const positions = [
+    { symbol: "AAPL", value: 3200, change: 2.1 },
+    { symbol: "GOOGL", value: 2800, change: -1.2 },
+    { symbol: "MSFT", value: 2500, change: 1.8 },
+    { symbol: "TSLA", value: 2000, change: 4.5 },
+    { symbol: "NVDA", value: 2000, change: -0.8 },
   ]
 
-  const handleNavClick = (href: string) => {
-    if (
-      href === "landing" ||
-      href === "dashboard" ||
-      href === "markets" ||
-      href === "portfolio" ||
-      href === "analytics" ||
-      href === "history" ||
-      href === "settings"
-    ) {
-      onNavigate(href as any)
-    }
-    setMobileMenuOpen(false)
-  }
+  const { connected, publicKey } = useWallet()
+
+  const navigationItems = [
+    { id: "dashboard", label: "Dashboard", icon: Home },
+    { id: "markets", label: "Markets", icon: ShoppingCart },
+    { id: "portfolio", label: "Portfolio", icon: PieChart },
+    { id: "analytics", label: "Analytics", icon: BarChart3 },
+    { id: "history", label: "History", icon: History },
+    { id: "settings", label: "Settings", icon: Settings },
+  ]
 
   return (
-    <nav className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white">
-      <div className="container mx-auto px-6">
-        <div className="flex h-16 items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center gap-8">
-            <button onClick={() => onNavigate("landing")} className="flex items-center">
-              <Logo />
-            </button>
-
-            {/* Desktop Navigation */}
-            <div className="hidden lg:flex items-center space-x-6">
-              {navItems.map((item) => {
-                if (item.requiresAuth && !connected) return null
-                return (
-                  <button
-                    key={item.label}
-                    onClick={() => handleNavClick(item.href)}
-                    className={`text-sm font-semibold transition-colors hover:text-gray-900 uppercase tracking-wide ${
-                      currentPage === item.href ? "text-gray-900" : "text-gray-600"
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Right Side */}
-          <div className="flex items-center gap-4">
-            {/* Notifications (when connected) */}
-            {connected && (
-              <Button variant="ghost" size="sm" className="relative">
-                <Bell className="h-4 w-4" />
-                <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 text-xs bg-gray-900 text-white rounded-full">
-                  3
-                </Badge>
-              </Button>
-            )}
-
-            {/* Wallet Connection */}
-            <div className="hidden sm:block">
-              <MockWalletButton />
-            </div>
-
-            {/* User Menu (when connected) */}
-            {connected && publicKey && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-gray-900 text-white flex items-center justify-center text-sm font-bold">
-                      {publicKey.toString().slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="hidden lg:block text-left">
-                      <div className="text-sm font-semibold">PORTFOLIO</div>
-                      <div className="text-xs text-gray-500">
-                        {publicKey.toString().slice(0, 6)}...{publicKey.toString().slice(-4)}
-                      </div>
-                    </div>
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 bg-white border border-gray-200 rounded-none">
-                  <DropdownMenuItem onClick={() => onNavigate("dashboard")} className="hover:bg-gray-50">
-                    <BarChart3 className="mr-2 h-4 w-4" />
-                    DASHBOARD
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onNavigate("portfolio")} className="hover:bg-gray-50">
-                    <PieChart className="mr-2 h-4 w-4" />
-                    PORTFOLIO
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onNavigate("settings")} className="hover:bg-gray-50">
-                    <Settings className="mr-2 h-4 w-4" />
-                    SETTINGS
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={onLogout} className="text-gray-600 hover:bg-gray-50">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    DISCONNECT
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-
-            {/* Mobile Menu */}
-            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="sm" className="lg:hidden">
-                  <Menu className="h-5 w-5" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-80 bg-white">
-                <div className="flex flex-col space-y-4 mt-8">
-                  <div className="pb-4 border-b border-gray-200">
-                    <MockWalletButton />
-                  </div>
-
-                  {navItems.map((item) => {
-                    if (item.requiresAuth && !connected) return null
-                    return (
-                      <button
-                        key={item.label}
-                        onClick={() => handleNavClick(item.href)}
-                        className={`flex items-center gap-3 px-3 py-2 text-left transition-colors font-semibold uppercase tracking-wide ${
-                          currentPage === item.href ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-50"
-                        }`}
-                      >
-                        <item.icon className="h-5 w-5" />
-                        {item.label}
-                      </button>
-                    )
-                  })}
-
-                  {connected && (
-                    <>
-                      <div className="pt-4 border-t border-gray-200">
-                        <div className="text-sm font-semibold mb-2 uppercase tracking-wide">ACCOUNT</div>
-                        <div className="text-xs text-gray-500 mb-4">
-                          {publicKey?.toString().slice(0, 8)}...{publicKey?.toString().slice(-8)}
-                        </div>
-                        <Button
-                          variant="outline"
-                          onClick={onLogout}
-                          className="w-full text-gray-600 bg-transparent border-gray-300 rounded-none"
-                        >
-                          <LogOut className="mr-2 h-4 w-4" />
-                          DISCONNECT WALLET
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </SheetContent>
-            </Sheet>
-          </div>
+    <div className="bg-white border-r border-gray-200 h-screen flex flex-col">
+      {/* Header */}
+      <div className="p-6 border-b border-gray-200">
+                 <div className="flex items-center justify-between">
+           <Logo showText={false} />
+           <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="md:hidden"
+          >
+            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
         </div>
       </div>
-    </nav>
+
+      {/* Portfolio Summary */}
+      <div className={`p-6 border-b border-gray-200 ${isExpanded ? "block" : "hidden md:block"}`}>
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Portfolio</CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowPortfolioDetails(!showPortfolioDetails)}
+              >
+                {showPortfolioDetails ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-2xl font-bold">${portfolioValue.toLocaleString()}</span>
+                <Badge variant={portfolioChange >= 0 ? "default" : "destructive"}>
+                  {portfolioChange >= 0 ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
+                  {portfolioChangePercent >= 0 ? "+" : ""}{portfolioChangePercent}%
+                </Badge>
+              </div>
+              <div className="text-sm text-gray-600">
+                {portfolioChange >= 0 ? "+" : ""}${portfolioChange} today
+              </div>
+            </div>
+
+            {showPortfolioDetails && (
+              <div className="mt-4 space-y-2">
+                <Separator />
+                <div className="text-sm font-medium text-gray-700">Top Positions</div>
+                {positions.slice(0, 3).map((position) => (
+                  <div key={position.symbol} className="flex items-center justify-between text-sm">
+                    <span>{position.symbol}</span>
+                    <div className="flex items-center space-x-2">
+                      <span>${position.value.toLocaleString()}</span>
+                      <span className={position.change >= 0 ? "text-green-600" : "text-red-600"}>
+                        {position.change >= 0 ? "+" : ""}{position.change}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Navigation */}
+      <div className={`flex-1 p-6 ${isExpanded ? "block" : "hidden md:block"}`}>
+        <nav className="space-y-2">
+          {navigationItems.map((item) => {
+            const Icon = item.icon
+            const isActive = currentPage === item.id
+            return (
+              <Button
+                key={item.id}
+                variant={isActive ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => onNavigate(item.id as any)}
+              >
+                <Icon className="h-4 w-4 mr-2" />
+                {item.label}
+              </Button>
+            )
+          })}
+        </nav>
+      </div>
+
+      {/* Wallet & Logout */}
+      <div className={`p-6 border-t border-gray-200 space-y-3 ${isExpanded ? "block" : "hidden md:block"}`}>
+        <WalletConnectButton />
+        <Button
+          variant="outline"
+          className="w-full justify-start"
+          onClick={onLogout}
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          Logout
+        </Button>
+      </div>
+    </div>
   )
 }

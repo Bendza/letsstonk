@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Navigation } from "./Navigation"
 import { useMockWallet } from "./MockWalletProvider"
 import { Shield, Bell, Wallet, RefreshCw, AlertTriangle, CheckCircle, Download, Trash2 } from "lucide-react"
 
@@ -67,10 +66,8 @@ export function Settings({ onNavigate, onLogout }: SettingsProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation currentPage="settings" onNavigate={onNavigate} onLogout={onLogout} />
-
-      <div className="container mx-auto px-6 py-8">
+    <div className="w-full">
+      <div className="px-6 py-8">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-4 tracking-tight">SETTINGS</h1>

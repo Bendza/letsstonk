@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
-import { Navigation } from "./Navigation"
 import {
   Target,
   TrendingUp,
@@ -125,10 +124,8 @@ export function Analytics({ onboardingData, onNavigate, onLogout }: AnalyticsPro
   const riskLabel = riskScore <= 3 ? "Conservative" : riskScore <= 7 ? "Moderate" : "Aggressive"
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation currentPage="analytics" onNavigate={onNavigate} onLogout={onLogout} />
-
-      <div className="container mx-auto px-6 py-8">
+    <div className="w-full">
+      <div className="px-6 py-8">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-4 tracking-tight">AI ANALYTICS & INSIGHTS</h1>

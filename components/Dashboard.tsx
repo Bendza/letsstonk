@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
-import { Navigation } from "./Navigation"
 import {
   TrendingUp,
   TrendingDown,
@@ -95,10 +94,8 @@ export function Dashboard({ onboardingData, onNavigate, onLogout }: DashboardPro
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation currentPage="dashboard" onNavigate={onNavigate} onLogout={onLogout} />
-
-      <div className="container mx-auto px-6 py-8">
+    <div className="w-full max-w-none">
+      <div className="px-6 py-8 w-full max-w-none">
         {/* Portfolio Overview Cards */}
         <div className="grid lg:grid-cols-4 gap-6 mb-8">
           <Card className="minimal-card">
