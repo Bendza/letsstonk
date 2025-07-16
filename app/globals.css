@@ -2,6 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Landing Page Styles */
+.minimal-card {
+  @apply bg-white border border-gray-200;
+}
+
+.card-shadow {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.btn-primary {
+  @apply bg-gray-900 text-white hover:bg-gray-800 transition-all duration-200;
+}
+
+.btn-secondary {
+  @apply border-2 border-gray-900 text-gray-900 hover:bg-gray-900 hover:text-white transition-all duration-200;
+}
+
+.heading-xl {
+  @apply text-4xl lg:text-5xl font-bold tracking-tight;
+}
+
+.heading-lg {
+  @apply text-2xl lg:text-3xl font-bold tracking-tight;
+}
+
+.heading-md {
+  @apply text-xl lg:text-2xl font-bold;
+}
+
+.body-lg {
+  @apply text-lg lg:text-xl;
+}
+
+.body-md {
+  @apply text-base lg:text-lg;
+}
+
 /* Import wallet adapter UI styles for wallet selection modal */
 @import '@solana/wallet-adapter-react-ui/styles.css';
 

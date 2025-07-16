@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,117 +8,240 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Search,
-  TrendingUp,
-  TrendingDown,
-  Filter,
   Grid3X3,
   List,
   ArrowUpRight,
   ArrowDownRight,
   Star,
   StarOff,
+  RefreshCw,
 } from "lucide-react"
 import { LineChart, Line, ResponsiveContainer } from "recharts"
+import { fetchXStocks, fetchPrices } from "@/lib/fetchXStocks"
+import { XStock } from "@/lib/types"
+import { 
+  getSolscanLink, 
+  formatLargeNumber, 
+  getMockVolumeData,
+  getMockTokenStats,
+  TokenStats
+} from "@/lib/solana-utils"
+import { SolscanLogo } from "@/components/SolscanLogo"
+import { TradingModal } from "@/components/TradingModal"
+import { getPriceHistory, PriceHistoryPoint } from "@/lib/price-history"
 
-interface MarketsProps {
-  onNavigate: (page: "landing" | "dashboard" | "markets" | "portfolio" | "analytics" | "history" | "settings") => void
-  onLogout: () => void
-  onTradeStock: (symbol: string) => void
+interface StockWithPrice extends XStock {
+  price: number
+  change: number
+  changePercent: number
+  volume: number
+  marketCap: number
+  sector: string
+  logo: string
+  chartData: { value: number }[]
+  isFavorite: boolean
+  onChainStats?: TokenStats | null
 }
 
-// Mock stock data
-const mockStocks = [
-  {
-    symbol: "xTSLA",
-    name: "Tesla Inc",
-    price: 248.5,
-    change: 12.3,
-    changePercent: 5.2,
-    volume: 1250000,
-    marketCap: 789000000000,
-    sector: "Technology",
-    logo: "🚗",
-    chartData: [{ value: 236 }, { value: 240 }, { value: 235 }, { value: 245 }, { value: 248.5 }],
-    isFavorite: true,
-  },
-  {
-    symbol: "xAAPL",
-    name: "Apple Inc",
-    price: 195.89,
-    change: -2.45,
-    changePercent: -1.2,
-    volume: 2100000,
-    marketCap: 3020000000000,
-    sector: "Technology",
-    logo: "🍎",
-    chartData: [{ value: 200 }, { value: 198 }, { value: 202 }, { value: 197 }, { value: 195.89 }],
-    isFavorite: false,
-  },
-  {
-    symbol: "xMSFT",
-    name: "Microsoft Corporation",
-    price: 428.75,
-    change: 8.9,
-    changePercent: 2.1,
-    volume: 890000,
-    marketCap: 3180000000000,
-    sector: "Technology",
-    logo: "💻",
-    chartData: [{ value: 420 }, { value: 425 }, { value: 422 }, { value: 430 }, { value: 428.75 }],
-    isFavorite: true,
-  },
-  {
-    symbol: "xGOOGL",
-    name: "Alphabet Inc",
-    price: 175.25,
-    change: 3.15,
-    changePercent: 1.8,
-    volume: 1450000,
-    marketCap: 2150000000000,
-    sector: "Technology",
-    logo: "🔍",
-    chartData: [{ value: 172 }, { value: 174 }, { value: 171 }, { value: 176 }, { value: 175.25 }],
-    isFavorite: false,
-  },
-  {
-    symbol: "xAMZN",
-    name: "Amazon.com Inc",
-    price: 186.43,
-    change: -1.87,
-    changePercent: -1.0,
-    volume: 1680000,
-    marketCap: 1920000000000,
-    sector: "Consumer Discretionary",
-    logo: "📦",
-    chartData: [{ value: 188 }, { value: 187 }, { value: 189 }, { value: 185 }, { value: 186.43 }],
-    isFavorite: false,
-  },
-  {
-    symbol: "xNVDA",
-    name: "NVIDIA Corporation",
-    price: 875.3,
-    change: 45.2,
-    changePercent: 5.4,
-    volume: 980000,
-    marketCap: 2160000000000,
-    sector: "Technology",
-    logo: "🎮",
-    chartData: [{ value: 830 }, { value: 850 }, { value: 845 }, { value: 870 }, { value: 875.3 }],
-    isFavorite: true,
-  },
-]
-
-export function Markets({ onNavigate, onLogout, onTradeStock }: MarketsProps) {
+export function Markets() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedSector, setSelectedSector] = useState("all")
-  const [sortBy, setSortBy] = useState("alphabetical")
+  const [sortBy, setSortBy] = useState("market-cap")
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid")
-  const [favorites, setFavorites] = useState<string[]>(["xTSLA", "xMSFT", "xNVDA"])
+  const [favorites, setFavorites] = useState<string[]>(["AAPLx", "TSLAx", "Vx"])
+  const [stocks, setStocks] = useState<StockWithPrice[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [countdown, setCountdown] = useState(60)
+  const [tradingModalOpen, setTradingModalOpen] = useState(false)
+  const [selectedStock, setSelectedStock] = useState<StockWithPrice | null>(null)
 
-  const sectors = ["all", "Technology", "Healthcare", "Finance", "Consumer Discretionary", "Energy"]
+  
+  // Remove the debug log that was causing console spam
+
+  // Sector mapping for xStocks
+  const sectorMap: Record<string, string> = {
+    'AAPLx': 'Technology',
+    'TSLAx': 'Automotive',
+    'GOOGLx': 'Technology',
+    'AMZNx': 'Consumer Discretionary',
+    'PGx': 'Consumer Staples',
+    'UNHx': 'Healthcare',
+    'Vx': 'Financial Services',
+    'WMTx': 'Consumer Staples',
+  }
+
+  // Logo mapping for xStocks
+  const logoMap: Record<string, string> = {
+    'AAPLx': '🍎',
+    'TSLAx': '🚗',
+    'GOOGLx': '🔍',
+    'AMZNx': '📦',
+    'PGx': '🧴',
+    'UNHx': '🏥',
+    'Vx': '💳',
+    'WMTx': '🛒',
+  }
+
+  const fetchStockData = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      console.log('🚀 Starting fetchStockData at', new Date().toISOString())
+
+
+
+      // Fetch xStocks metadata from database
+      const xStocks = await fetchXStocks()
+      
+      if (xStocks.length === 0) {
+        setError('No xStocks found in database')
+        return
+      }
+
+      // Fetch live prices only for tokens with valid addresses
+      const validStocks = xStocks.filter(stock => stock.address && stock.address.length > 0)
+      const addresses = validStocks.map(stock => stock.address)
+      
+      console.log(`Fetching prices for ${addresses.length} valid tokens`)
+      const prices = await fetchPrices(addresses)
+
+      // Use mock data for all tokens to avoid RPC rate limiting
+      console.log('✅ Using mock token stats to avoid RPC rate limiting')
+      const onChainStats = addresses.reduce((acc, address) => {
+        acc[address] = getMockTokenStats(address)
+        return acc
+      }, {} as Record<string, TokenStats | null>)
+      
+      console.log('📊 Generated mock stats for', Object.keys(onChainStats).length, 'tokens')
+
+      // Transform data for display with better chart data
+      const stocksWithPrices: StockWithPrice[] = await Promise.all(
+        xStocks.map(async (stock) => {
+          const price = prices[stock.address] || 0
+          let change = 0
+          let changePercent = 0
+          
+          if (price > 0) {
+            const previousPrice = price * (1 + (Math.random() - 0.5) * 0.02) // Mock previous price for change calculation
+            change = price - previousPrice
+            changePercent = (change / previousPrice) * 100
+          }
+          
+          // Get on-chain stats for this token, with fallback to mock data
+          let tokenStats = onChainStats[stock.address]
+          if (!tokenStats) {
+            console.warn(`No on-chain stats for ${stock.symbol}, using mock data`)
+            tokenStats = getMockTokenStats(stock.address)
+          }
+          
+          // Debug: Log the on-chain stats
+          console.log(`${stock.symbol} on-chain stats:`, {
+            supply: tokenStats?.supply,
+            price: price,
+            onChainMarketCap: tokenStats?.marketCap,
+            calculatedMarketCap: tokenStats?.supply && price ? tokenStats.supply * price : null
+          })
+          
+          // Use on-chain market cap calculation: supply * price
+          let marketCap = 0
+          let volume = 0
+          
+          if (price > 0) {
+            // Only calculate market cap and volume if price is greater than 0
+            if (tokenStats && tokenStats.supply > 0) {
+              marketCap = tokenStats.supply * price
+            } else if (tokenStats && tokenStats.marketCap > 0) {
+              marketCap = tokenStats.marketCap
+            } else {
+              // Only use small mock value if no on-chain data available but price exists
+              marketCap = Math.floor(Math.random() * 10000000) + 1000000 // Small mock: 1M-11M
+            }
+            
+            // Get volume data only if price > 0
+            const volumeData = getMockVolumeData(stock.address)
+            volume = volumeData.volume24h
+          }
+          // If price is 0, both marketCap and volume remain 0
+
+          // Fetch price history for better chart data
+          let chartData: { value: number }[] = []
+          
+          if (price > 0) {
+            try {
+              const priceHistory = await getPriceHistory(stock.address, stock.symbol, '1d')
+              chartData = priceHistory.slice(-5).map(point => ({
+                value: Number(point.price.toFixed(2))
+              }))
+            } catch (error) {
+              console.error(`Failed to fetch price history for ${stock.symbol}:`, error)
+              // Fallback to mock chart data only if price > 0
+              chartData = Array.from({ length: 5 }, (_, i) => ({
+                value: Number((price * (1 + (Math.random() - 0.5) * 0.05)).toFixed(2))
+              }))
+            }
+          } else {
+            // Show flat line at 0 for stocks with no price
+            chartData = Array.from({ length: 5 }, () => ({ value: 0 }))
+          }
+
+          return {
+            ...stock,
+            price: Number(price.toFixed(2)), // Format to 2 decimal places
+            change: Number(change.toFixed(2)), // Format to 2 decimal places
+            changePercent: Number(changePercent.toFixed(2)), // Format to 2 decimal places
+            volume: volume, // Use calculated volume (0 if price is 0)
+            marketCap: marketCap,
+            sector: sectorMap[stock.symbol] || 'Technology',
+            logo: stock.logoURI || logoMap[stock.symbol] || '📈', // Use real logo URI or fallback to emoji
+            chartData: chartData,
+            isFavorite: favorites.includes(stock.symbol),
+            onChainStats: tokenStats
+          }
+        })
+      )
+
+      setStocks(stocksWithPrices)
+    } catch (err) {
+      console.error('Error fetching stock data:', err)
+      setError(err instanceof Error ? err.message : 'Failed to fetch stock data')
+    } finally {
+      setLoading(false)
+    }
+  }, [favorites]) // Add favorites as dependency since it's used in the function
+
+  useEffect(() => {
+    fetchStockData()
+  }, [fetchStockData])
+
+  // Optimized auto-refresh timer - separate countdown from data fetching
+  useEffect(() => {
+    const countdownInterval = setInterval(() => {
+      setCountdown(prev => prev - 1)
+    }, 1000)
+
+    return () => clearInterval(countdownInterval)
+  }, [])
+
+  // Separate effect for triggering refresh when countdown reaches 0
+  useEffect(() => {
+    if (countdown <= 0) {
+      fetchStockData()
+      setCountdown(60)
+    }
+  }, [countdown, fetchStockData])
+
+  // Manual refresh handler
+  const handleManualRefresh = useCallback(() => {
+    setCountdown(60)
+    fetchStockData()
+  }, [fetchStockData])
+
+  const sectors = ["all", "Technology", "Healthcare", "Financial Services", "Consumer Discretionary", "Consumer Staples", "Automotive"]
 
   const filteredAndSortedStocks = useMemo(() => {
-    const filtered = mockStocks.filter((stock) => {
+    const filtered = stocks.filter((stock) => {
       const matchesSearch =
         stock.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         stock.symbol.toLowerCase().includes(searchQuery.toLowerCase())
@@ -127,6 +250,8 @@ export function Markets({ onNavigate, onLogout, onTradeStock }: MarketsProps) {
     })
 
     switch (sortBy) {
+      case "market-cap":
+        return filtered.sort((a, b) => b.marketCap - a.marketCap)
       case "price-high":
         return filtered.sort((a, b) => b.price - a.price)
       case "price-low":
@@ -137,314 +262,383 @@ export function Markets({ onNavigate, onLogout, onTradeStock }: MarketsProps) {
         return filtered.sort((a, b) => a.changePercent - b.changePercent)
       case "volume":
         return filtered.sort((a, b) => b.volume - a.volume)
-      default:
+      case "alphabetical":
         return filtered.sort((a, b) => a.name.localeCompare(b.name))
+      default:
+        return filtered.sort((a, b) => b.marketCap - a.marketCap)
     }
-  }, [searchQuery, selectedSector, sortBy])
+  }, [stocks, searchQuery, selectedSector, sortBy])
 
   const toggleFavorite = (symbol: string) => {
-    setFavorites((prev) => (prev.includes(symbol) ? prev.filter((s) => s !== symbol) : [...prev, symbol]))
+    setFavorites(prev => 
+      prev.includes(symbol) 
+        ? prev.filter(s => s !== symbol)
+        : [...prev, symbol]
+    )
   }
 
-  const formatNumber = (num: number) => {
-    if (num >= 1e12) return `$${(num / 1e12).toFixed(1)}T`
-    if (num >= 1e9) return `$${(num / 1e9).toFixed(1)}B`
-    if (num >= 1e6) return `$${(num / 1e6).toFixed(1)}M`
-    if (num >= 1e3) return `$${(num / 1e3).toFixed(1)}K`
-    return `$${num.toFixed(0)}`
-  }
+  // Use imported formatLargeNumber and formatVolume functions from solana-utils
 
-  const topGainers = mockStocks
-    .filter((s) => s.changePercent > 0)
-    .sort((a, b) => b.changePercent - a.changePercent)
-    .slice(0, 3)
-  const topLosers = mockStocks
-    .filter((s) => s.changePercent < 0)
-    .sort((a, b) => a.changePercent - b.changePercent)
-    .slice(0, 3)
-
-  return (
-    <div className="w-full">
-      <div className="px-6 py-8">
+  if (loading) {
+    return (
+      <div className="w-full max-w-7xl mx-auto p-4">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-4 tracking-tight">STOCK MARKETS</h1>
-          <p className="text-gray-600 text-lg">Trade tokenized stocks 24/7 on Solana blockchain</p>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold">Markets</h1>
+            <p className="text-gray-600">Browse and trade tokenized stocks</p>
+          </div>
         </div>
-
-        {/* Market Movers */}
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          <Card className="minimal-card">
-            <CardHeader className="border-b border-gray-200">
-              <CardTitle className="flex items-center gap-2 text-green-700">
-                <TrendingUp className="h-5 w-5" />
-                TOP GAINERS
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4">
-              <div className="space-y-3">
-                {topGainers.map((stock) => (
-                  <div key={stock.symbol} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{stock.logo}</span>
-                      <div>
-                        <div className="font-semibold">{stock.symbol}</div>
-                        <div className="text-sm text-gray-500">${stock.price}</div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-green-700 font-semibold">+{stock.changePercent}%</div>
-                      <Button size="sm" className="btn-primary mt-1" onClick={() => onTradeStock(stock.symbol)}>
-                        BUY
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="minimal-card">
-            <CardHeader className="border-b border-gray-200">
-              <CardTitle className="flex items-center gap-2 text-red-600">
-                <TrendingDown className="h-5 w-5" />
-                TOP LOSERS
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4">
-              <div className="space-y-3">
-                {topLosers.map((stock) => (
-                  <div key={stock.symbol} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{stock.logo}</span>
-                      <div>
-                        <div className="font-semibold">{stock.symbol}</div>
-                        <div className="text-sm text-gray-500">${stock.price}</div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-red-600 font-semibold">{stock.changePercent}%</div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="btn-secondary bg-transparent mt-1"
-                        onClick={() => onTradeStock(stock.symbol)}
-                      >
-                        BUY DIP
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Search and Filters */}
-        <Card className="minimal-card mb-6">
-          <CardContent className="p-6">
-            <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
-              <div className="flex flex-col sm:flex-row gap-4 flex-1">
-                <div className="relative flex-1 max-w-md">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder="Search stocks..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 form-input"
-                  />
-                </div>
-
-                <Select value={selectedSector} onValueChange={setSelectedSector}>
-                  <SelectTrigger className="w-48">
-                    <Filter className="h-4 w-4 mr-2" />
-                    <SelectValue placeholder="All Sectors" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sectors.map((sector) => (
-                      <SelectItem key={sector} value={sector}>
-                        {sector === "all" ? "All Sectors" : sector}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="Sort by" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="alphabetical">Alphabetical</SelectItem>
-                    <SelectItem value="price-high">Price: High to Low</SelectItem>
-                    <SelectItem value="price-low">Price: Low to High</SelectItem>
-                    <SelectItem value="change-high">Gainers</SelectItem>
-                    <SelectItem value="change-low">Losers</SelectItem>
-                    <SelectItem value="volume">Volume</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button
-                  variant={viewMode === "grid" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setViewMode("grid")}
-                  className={viewMode === "grid" ? "bg-gray-900 text-white" : "btn-secondary bg-transparent"}
-                >
-                  <Grid3X3 className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={viewMode === "table" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setViewMode("table")}
-                  className={viewMode === "table" ? "bg-gray-900 text-white" : "btn-secondary bg-transparent"}
-                >
-                  <List className="h-4 w-4" />
-                </Button>
+        
+        {/* Loading State */}
+        <div className="flex items-center justify-center min-h-[500px]">
+          <div className="text-center">
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-gray-200 border-t-gray-800 rounded-full animate-spin mx-auto mb-4"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-8 h-8 bg-gray-800 rounded-full animate-pulse"></div>
               </div>
             </div>
+            <h2 className="text-xl font-semibold text-gray-800 mb-2">Loading Market Data</h2>
+            <p className="text-gray-600 mb-4">Fetching live prices and on-chain data...</p>
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-2 h-2 bg-gray-800 rounded-full animate-bounce"></div>
+              <div className="w-2 h-2 bg-gray-800 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+              <div className="w-2 h-2 bg-gray-800 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="w-full flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <p className="text-lg text-red-600 mb-4">Error: {error}</p>
+          <Button onClick={fetchStockData} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // Top gainers/losers sections removed as requested
+
+  return (
+    <div className="w-full max-w-7xl mx-auto p-4 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold">Markets</h1>
+            <p className="text-gray-600 text-sm md:text-base md:block">Browse and trade tokenized stocks</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className="flex items-center gap-2 px-2 md:px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+            <RefreshCw className={`h-4 w-4 text-gray-600 ${loading ? 'animate-spin' : ''}`} />
+            <span className="text-xs md:text-sm font-medium text-gray-700">
+              Auto-refresh: {countdown}s
+            </span>
+          </div>
+          <Button onClick={handleManualRefresh} variant="outline" size="sm" disabled={loading}>
+            <RefreshCw className="h-4 w-4 md:mr-2" />
+            <span className="hidden md:inline">Refresh Now</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* Top Gainers/Losers sections removed as requested */}
+
+      {/* Search and Filters */}
+      <Card className="minimal-card mb-6">
+        <CardContent className="p-4 md:p-6">
+          <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+            <div className="flex flex-col sm:flex-row gap-4 flex-1 w-full">
+              <div className="relative flex-1 max-w-md">
+                <Input
+                  placeholder="Search stocks..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 rounded-xl form-input"
+                />
+              </div>
+
+              <Select value={selectedSector} onValueChange={setSelectedSector}>
+                <SelectTrigger className="w-full sm:w-48">
+                  <SelectValue placeholder="All Sectors" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sectors.map((sector) => (
+                    <SelectItem key={sector} value={sector}>
+                      {sector === "all" ? "All Sectors" : sector}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="market-cap">Market Cap</SelectItem>
+                  <SelectItem value="price-high">Price: High to Low</SelectItem>
+                  <SelectItem value="price-low">Price: Low to High</SelectItem>
+                  <SelectItem value="change-high">Gainers</SelectItem>
+                  <SelectItem value="change-low">Losers</SelectItem>
+                  <SelectItem value="volume">Volume</SelectItem>
+                  <SelectItem value="alphabetical">Alphabetical</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant={viewMode === "grid" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("grid")}
+                className={viewMode === "grid" ? "bg-gray-900 text-white" : "btn-secondary bg-transparent"}
+              >
+                <Grid3X3 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "table" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("table")}
+                className={viewMode === "table" ? "bg-gray-900 text-white" : "btn-secondary bg-transparent"}
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Stocks Display */}
+      {viewMode === "grid" ? (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredAndSortedStocks.map((stock) => (
+            <Card key={stock.symbol} className="minimal-card card-shadow hover:shadow-lg transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {stock.logoURI ? (
+                      <img 
+                        src={stock.logoURI} 
+                        alt={`${stock.symbol} logo`} 
+                        className="w-10 h-10 rounded-full object-contain bg-white p-1 border border-gray-200"
+                        onError={(e) => {
+                          // Fallback to emoji if image fails to load
+                          const img = e.currentTarget
+                          const fallback = img.nextElementSibling as HTMLElement
+                          img.style.display = 'none'
+                          if (fallback) fallback.style.display = 'block'
+                        }}
+                      />
+                    ) : null}
+                    <span 
+                      className="text-3xl" 
+                      style={{ display: stock.logoURI ? 'none' : 'block' }}
+                    >
+                      {logoMap[stock.symbol] || '📈'}
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-lg">{stock.symbol}</CardTitle>
+                        <a 
+                          href={getSolscanLink(stock.address)} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 transition-colors"
+                          title="View on Solscan"
+                        >
+                          <SolscanLogo className="h-4 w-4" />
+                        </a>
+                      </div>
+                      <CardDescription className="text-sm">{stock.name}</CardDescription>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => toggleFavorite(stock.symbol)} className="p-1">
+                    {favorites.includes(stock.symbol) ? (
+                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                    ) : (
+                      <StarOff className="h-4 w-4 text-gray-400" />
+                    )}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-2xl font-bold">${stock.price.toFixed(2)}</div>
+                  <div className={`flex items-center gap-1 ${stock.change >= 0 ? "text-green-700" : "text-red-600"}`}>
+                    {stock.change >= 0 ? (
+                      <ArrowUpRight className="h-4 w-4" />
+                    ) : (
+                      <ArrowDownRight className="h-4 w-4" />
+                    )}
+                    <span className="font-semibold">
+                      {stock.change >= 0 ? "+" : ""}
+                      {isNaN(stock.changePercent) ? "0.00" : stock.changePercent.toFixed(2)}%
+                    </span>
+                  </div>
+                </div>
+
+                <div className="h-16">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={stock.chartData}>
+                      <Line
+                        type="monotone"
+                        dataKey="value"
+                        stroke={stock.change >= 0 ? "#15803d" : "#dc2626"}
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">Volume</div>
+                    <div className="font-semibold">{formatLargeNumber(stock.volume)}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Market Cap</div>
+                                            <div className="font-semibold">{formatLargeNumber(stock.marketCap)}</div>
+                  </div>
+                </div>
+
+                <Badge variant="secondary" className="bg-gray-100 text-gray-700 rounded-none">
+                  {stock.sector}
+                </Badge>
+
+                <Button 
+                  className="btn-primary w-full"
+                  onClick={() => {
+                    setSelectedStock(stock)
+                    setTradingModalOpen(true)
+                  }}
+                >
+                  TRADE {stock.symbol}
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card className="minimal-card">
+          <CardContent className="p-0">
+            <table className="portfolio-table">
+              <thead>
+                <tr>
+                  <th>STOCK</th>
+                  <th>PRICE</th>
+                  <th>CHANGE</th>
+                  <th>VOLUME</th>
+                  <th>MARKET CAP</th>
+                  <th>ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAndSortedStocks.map((stock) => (
+                  <tr key={stock.symbol}>
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleFavorite(stock.symbol)}
+                          className="p-1"
+                        >
+                          {favorites.includes(stock.symbol) ? (
+                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                          ) : (
+                            <StarOff className="h-4 w-4 text-gray-400" />
+                          )}
+                        </Button>
+                        {stock.logoURI ? (
+                          <img 
+                            src={stock.logoURI} 
+                            alt={`${stock.symbol} logo`} 
+                            className="w-8 h-8 rounded-full object-contain bg-white p-1 border border-gray-200"
+                            onError={(e) => {
+                              // Fallback to emoji if image fails to load
+                              const img = e.currentTarget
+                              const fallback = img.nextElementSibling as HTMLElement
+                              img.style.display = 'none'
+                              if (fallback) fallback.style.display = 'block'
+                            }}
+                          />
+                        ) : null}
+                        <span 
+                          className="text-2xl" 
+                          style={{ display: stock.logoURI ? 'none' : 'block' }}
+                        >
+                          {logoMap[stock.symbol] || '📈'}
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">{stock.symbol}</span>
+                            <a 
+                              href={getSolscanLink(stock.address)} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 transition-colors"
+                              title="View on Solscan"
+                            >
+                              <SolscanLogo className="h-3 w-3" />
+                            </a>
+                          </div>
+                          <div className="text-sm text-gray-500">{stock.name}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="font-semibold">${stock.price.toFixed(2)}</td>
+                    <td className={`${stock.change >= 0 ? "text-green-700" : "text-red-600"}`}>
+                      <div className="flex items-center">
+                        {stock.change >= 0 ? (
+                          <ArrowUpRight className="h-4 w-4 mr-1" />
+                        ) : (
+                          <ArrowDownRight className="h-4 w-4 mr-1" />
+                        )}
+                        {isNaN(stock.changePercent) ? "0.00" : stock.changePercent.toFixed(2)}%
+                      </div>
+                    </td>
+                    <td>{formatLargeNumber(stock.volume)}</td>
+                    <td>{formatLargeNumber(stock.marketCap)}</td>
+                    <td>
+                      <Button 
+                        size="sm" 
+                        className="btn-primary"
+                        onClick={() => {
+                          setSelectedStock(stock)
+                          setTradingModalOpen(true)
+                        }}
+                      >
+                        TRADE
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </CardContent>
         </Card>
-
-        {/* Stocks Display */}
-        {viewMode === "grid" ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredAndSortedStocks.map((stock) => (
-              <Card key={stock.symbol} className="minimal-card card-shadow hover:shadow-lg transition-shadow">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-3xl">{stock.logo}</span>
-                      <div>
-                        <CardTitle className="text-lg">{stock.symbol}</CardTitle>
-                        <CardDescription className="text-sm">{stock.name}</CardDescription>
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => toggleFavorite(stock.symbol)} className="p-1">
-                      {favorites.includes(stock.symbol) ? (
-                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                      ) : (
-                        <StarOff className="h-4 w-4 text-gray-400" />
-                      )}
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="text-2xl font-bold">${stock.price}</div>
-                    <div className={`flex items-center gap-1 ${stock.change >= 0 ? "text-green-700" : "text-red-600"}`}>
-                      {stock.change >= 0 ? (
-                        <ArrowUpRight className="h-4 w-4" />
-                      ) : (
-                        <ArrowDownRight className="h-4 w-4" />
-                      )}
-                      <span className="font-semibold">
-                        {stock.change >= 0 ? "+" : ""}
-                        {stock.changePercent}%
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="h-16">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={stock.chartData}>
-                        <Line
-                          type="monotone"
-                          dataKey="value"
-                          stroke={stock.change >= 0 ? "#15803d" : "#dc2626"}
-                          strokeWidth={2}
-                          dot={false}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <div className="text-gray-500">Volume</div>
-                      <div className="font-semibold">{formatNumber(stock.volume)}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500">Market Cap</div>
-                      <div className="font-semibold">{formatNumber(stock.marketCap)}</div>
-                    </div>
-                  </div>
-
-                  <Badge variant="secondary" className="bg-gray-100 text-gray-700 rounded-none">
-                    {stock.sector}
-                  </Badge>
-
-                  <Button className="btn-primary w-full" onClick={() => onTradeStock(stock.symbol)}>
-                    TRADE {stock.symbol}
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <Card className="minimal-card">
-            <CardContent className="p-0">
-              <table className="portfolio-table">
-                <thead>
-                  <tr>
-                    <th>STOCK</th>
-                    <th>PRICE</th>
-                    <th>CHANGE</th>
-                    <th>VOLUME</th>
-                    <th>MARKET CAP</th>
-                    <th>ACTIONS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredAndSortedStocks.map((stock) => (
-                    <tr key={stock.symbol}>
-                      <td>
-                        <div className="flex items-center gap-3">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleFavorite(stock.symbol)}
-                            className="p-1"
-                          >
-                            {favorites.includes(stock.symbol) ? (
-                              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                            ) : (
-                              <StarOff className="h-4 w-4 text-gray-400" />
-                            )}
-                          </Button>
-                          <span className="text-2xl">{stock.logo}</span>
-                          <div>
-                            <div className="font-semibold">{stock.symbol}</div>
-                            <div className="text-sm text-gray-500">{stock.name}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="font-semibold">${stock.price}</td>
-                      <td className={`${stock.change >= 0 ? "text-green-700" : "text-red-600"}`}>
-                        <div className="flex items-center">
-                          {stock.change >= 0 ? (
-                            <ArrowUpRight className="h-4 w-4 mr-1" />
-                          ) : (
-                            <ArrowDownRight className="h-4 w-4 mr-1" />
-                          )}
-                          {stock.changePercent}%
-                        </div>
-                      </td>
-                      <td>{formatNumber(stock.volume)}</td>
-                      <td>{formatNumber(stock.marketCap)}</td>
-                      <td>
-                        <Button size="sm" className="btn-primary" onClick={() => onTradeStock(stock.symbol)}>
-                          TRADE
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+      )}
+      
+      {/* Trading Modal */}
+      {selectedStock && (
+        <TradingModal 
+          open={tradingModalOpen}
+          onOpenChange={setTradingModalOpen}
+          stock={selectedStock}
+        />
+      )}
     </div>
   )
 }

@@ -181,37 +181,57 @@ export function useWalletAuth() {
     const walletAddress = publicKey.toBase58();
 
     try {
-      console.log('📝 Creating user profile...', { riskLevel, initialInvestment, walletAddress });
+      console.log('📝 Creating/updating user profile...', { riskLevel, initialInvestment, walletAddress });
 
-      // Create user profile
+      // Upsert user profile (update if exists, create if not)
       const { error: userError } = await supabase
         .from('users')
-        .insert({
+        .upsert({
           id: state.user.id,
           wallet_address: walletAddress,
           risk_tolerance: riskLevel,
           total_invested: initialInvestment,
+        }, {
+          onConflict: 'id'
         });
 
       if (userError) {
-        console.error('❌ Error creating user profile:', userError);
+        console.error('❌ Error upserting user profile:', userError);
         throw userError;
       }
 
-      // Create portfolio
-      const { error: portfolioError } = await supabase
+      // Check if portfolio already exists
+      const { data: existingPortfolio, error: checkError } = await supabase
         .from('portfolios')
-        .insert({
-          user_id: state.user.id,
-          wallet_address: walletAddress,
-          risk_level: riskLevel,
-          initial_investment: initialInvestment,
-          total_value: initialInvestment,
-        });
+        .select('id')
+        .eq('user_id', state.user.id)
+        .eq('is_active', true)
+        .single();
 
-      if (portfolioError) {
-        console.error('❌ Error creating portfolio:', portfolioError);
-        throw portfolioError;
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('❌ Error checking existing portfolio:', checkError);
+        throw checkError;
+      }
+
+      // Only create portfolio if it doesn't exist
+      if (!existingPortfolio) {
+        const { error: portfolioError } = await supabase
+          .from('portfolios')
+          .insert({
+            user_id: state.user.id,
+            wallet_address: walletAddress,
+            risk_level: riskLevel,
+            initial_investment: initialInvestment,
+            total_value: initialInvestment,
+          });
+
+        if (portfolioError) {
+          console.error('❌ Error creating portfolio:', portfolioError);
+          throw portfolioError;
+        }
+        console.log('✅ New portfolio created successfully');
+      } else {
+        console.log('✅ Portfolio already exists, skipping creation');
       }
 
       // Update state
@@ -221,10 +241,10 @@ export function useWalletAuth() {
         hasPortfolio: true,
       }));
 
-      console.log('✅ User profile and portfolio created successfully');
+      console.log('✅ User profile and portfolio setup completed successfully');
       return { success: true };
     } catch (error) {
-      console.error('❌ Error creating user profile:', error);
+      console.error('❌ Error setting up user profile:', error);
       throw error;
     }
   };

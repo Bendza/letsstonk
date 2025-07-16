@@ -17,6 +17,7 @@ import {
   DollarSign,
   Target,
   Clock,
+  Activity,
 } from "lucide-react"
 import {
   LineChart,
@@ -55,7 +56,7 @@ export function Dashboard({ onboardingData, onNavigate, onLogout }: DashboardPro
   const [currentValue, setCurrentValue] = useState(onboardingData.initialInvestment)
   const [isRebalancing, setIsRebalancing] = useState(false)
 
-  const allocation = getAllocationForRisk(onboardingData.riskLevel)
+  const allocation = getAllocationForRisk(onboardingData.riskTolerance)
   const totalReturn = currentValue - onboardingData.initialInvestment
   const totalReturnPercent = (totalReturn / onboardingData.initialInvestment) * 100
 
@@ -115,7 +116,7 @@ export function Dashboard({ onboardingData, onNavigate, onLogout }: DashboardPro
                 ) : (
                   <ArrowDownRight className="h-4 w-4 mr-1" />
                 )}
-                ${Math.abs(totalReturn).toFixed(2)} ({totalReturnPercent.toFixed(2)}%)
+                ${Math.abs(totalReturn).toFixed(2)}
               </div>
             </CardContent>
           </Card>
@@ -145,14 +146,8 @@ export function Dashboard({ onboardingData, onNavigate, onLogout }: DashboardPro
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-gray-900">{onboardingData.riskLevel}/10</div>
-              <div className="text-sm text-gray-600 mt-2">
-                {onboardingData.riskLevel <= 3
-                  ? "CONSERVATIVE"
-                  : onboardingData.riskLevel <= 7
-                    ? "MODERATE"
-                    : "AGGRESSIVE"}
-              </div>
+              <div className="text-3xl font-bold text-gray-900">{onboardingData.riskTolerance}/10</div>
+              <div className="text-sm text-gray-600 mt-2">RISK TOLERANCE</div>
             </CardContent>
           </Card>
 
@@ -160,14 +155,14 @@ export function Dashboard({ onboardingData, onNavigate, onLogout }: DashboardPro
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
-                  Last Rebalanced
+                  Last Rebalance
                 </CardTitle>
-                <Clock className="h-4 w-4 text-gray-400" />
+                <Activity className="h-4 w-4 text-gray-400" />
               </div>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-gray-900">2d</div>
-              <div className="text-sm text-gray-600 mt-2">AGO</div>
+              <div className="text-sm text-gray-600 mt-2">DAYS AGO</div>
             </CardContent>
           </Card>
         </div>

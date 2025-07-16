@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 export type Json =
   | string
@@ -294,6 +294,57 @@ export type Database = {
         }
         Relationships: []
       }
+      xstocks_metadata: {
+        Row: {
+          id: string
+          symbol: string
+          name: string
+          solana_address: string
+          decimals: number | null
+          logo_uri: string | null
+          tags: string[] | null
+          sector: string | null
+          is_active: boolean | null
+          jupiter_verified: boolean | null
+          daily_volume: number | null
+          market_cap: number | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          symbol: string
+          name: string
+          solana_address: string
+          decimals?: number | null
+          logo_uri?: string | null
+          tags?: string[] | null
+          sector?: string | null
+          is_active?: boolean | null
+          jupiter_verified?: boolean | null
+          daily_volume?: number | null
+          market_cap?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          symbol?: string
+          name?: string
+          solana_address?: string
+          decimals?: number | null
+          logo_uri?: string | null
+          tags?: string[] | null
+          sector?: string | null
+          is_active?: boolean | null
+          jupiter_verified?: boolean | null
+          daily_volume?: number | null
+          market_cap?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -436,23 +487,18 @@ export const Constants = {
   },
 } as const
 
-// Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+export const supabase = createSupabaseClient<Database>(supabaseUrl, supabaseAnonKey)
 
-// Server-side client for admin operations
-export const createServerClient = () => {
-  return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    }
+export function createAdminClient() {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set for admin client')
+  }
+  return createSupabaseClient<Database>(
+    supabaseUrl,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
   )
 }
  

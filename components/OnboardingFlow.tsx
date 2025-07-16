@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -8,10 +8,11 @@ import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { ArrowRight, ArrowLeft, TrendingUp, Shield, Target, CheckCircle, Loader2 } from "lucide-react"
+import { ArrowRight, ArrowLeft, TrendingUp, Shield, Target, CheckCircle, Loader2, DollarSign, PieChart } from "lucide-react"
 import { WalletConnectButton } from "./WalletConnectButton"
 import { useWallet } from '@solana/wallet-adapter-react'
 import { useWalletAuth } from '@/hooks/useWalletAuth'
+import { useJupiterSwap } from '@/hooks/useJupiterSwap'
 
 export interface OnboardingData {
   riskTolerance: number
@@ -19,6 +20,7 @@ export interface OnboardingData {
   portfolioName: string
   rebalanceFrequency: "daily" | "weekly" | "monthly"
   autoRebalance: boolean
+  walletAddress?: string
 }
 
 interface OnboardingFlowProps {
@@ -39,6 +41,15 @@ export function OnboardingFlow({ onComplete, onBack }: OnboardingFlowProps) {
 
   const { connected, publicKey } = useWallet()
   const { isAuthenticated, createUserProfile } = useWalletAuth()
+  const { 
+    getSwapQuote, 
+    calculatePortfolioAllocation, 
+    getPortfolioQuotes, 
+    createPortfolio,
+    testXStockAvailability,
+    isLoading: isSwapLoading, 
+    error: swapError 
+  } = useJupiterSwap()
 
   const steps = [
     {
@@ -57,14 +68,19 @@ export function OnboardingFlow({ onComplete, onBack }: OnboardingFlowProps) {
       component: InvestmentStep,
     },
     {
+      title: "Portfolio Preview",
+      description: "Review your portfolio allocation",
+      component: PortfolioPreviewStep,
+    },
+    {
       title: "Portfolio Setup",
       description: "Configure your portfolio settings",
       component: PortfolioSetupStep,
     },
     {
-      title: "Review & Confirm",
-      description: "Review your settings and confirm",
-      component: ReviewStep,
+      title: "Execute Trades",
+      description: "Create your portfolio with Jupiter",
+      component: ExecuteTradesStep,
     },
   ]
 
@@ -72,13 +88,25 @@ export function OnboardingFlow({ onComplete, onBack }: OnboardingFlowProps) {
     if (currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1)
     } else {
-      // Final step - create user profile and portfolio
+      // Final step - create user profile and execute trades
       setIsCreating(true)
       try {
+        // Create user profile first
         await createUserProfile(formData.riskTolerance, formData.initialInvestment)
-        onComplete(formData)
+        
+        // Calculate portfolio allocation
+        const allocation = calculatePortfolioAllocation(formData.riskTolerance, formData.initialInvestment)
+        
+        // Execute trades via Jupiter
+        const result = await createPortfolio(allocation)
+        
+        if (result.success) {
+          onComplete(formData)
+        } else {
+          throw new Error(result.error || 'Failed to create portfolio')
+        }
       } catch (error) {
-        console.error('Error creating user profile:', error)
+        console.error('Error creating portfolio:', error)
         // Handle error - maybe show a toast or error message
       } finally {
         setIsCreating(false)
@@ -103,6 +131,8 @@ export function OnboardingFlow({ onComplete, onBack }: OnboardingFlowProps) {
       case 2:
         return formData.initialInvestment >= 1
       case 3:
+        return true // Portfolio preview step
+      case 4:
         return formData.portfolioName.trim().length > 0
       default:
         return true
@@ -112,50 +142,57 @@ export function OnboardingFlow({ onComplete, onBack }: OnboardingFlowProps) {
   const CurrentStepComponent = steps[currentStep].component
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
-      <div className="container mx-auto px-6">
-        <div className="max-w-2xl mx-auto">
+    <div className="min-h-screen bg-white">
+      <div className="container mx-auto px-6 py-12">
+        <div className="max-w-4xl mx-auto">
           {/* Progress Header */}
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-4">
-              Portfolio Setup
+          <div className="text-center mb-12">
+            <h1 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-6 tracking-tight">
+              PORTFOLIO SETUP
             </h1>
-            <div className="flex items-center justify-center space-x-2 mb-4">
+            <p className="text-xl text-gray-600 mb-8">
+              Let's create your personalized stock portfolio
+            </p>
+            <div className="flex items-center justify-center space-x-3 mb-6">
               {steps.map((_, index) => (
                 <div
                   key={index}
-                  className={`w-3 h-3 rounded-full ${
-                    index <= currentStep ? "bg-blue-600" : "bg-gray-300"
+                  className={`w-4 h-4 rounded-full transition-all duration-300 ${
+                    index <= currentStep ? "bg-gray-900" : "bg-gray-300"
                   }`}
                 />
               ))}
             </div>
-            <Progress value={((currentStep + 1) / steps.length) * 100} className="w-full" />
-            <p className="text-sm text-gray-600 mt-2">
+            <Progress value={((currentStep + 1) / steps.length) * 100} className="w-full max-w-md mx-auto" />
+            <p className="text-sm text-gray-500 mt-3 uppercase tracking-wide">
               Step {currentStep + 1} of {steps.length}
             </p>
           </div>
 
           {/* Step Content */}
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <span className="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">
+          <Card className="minimal-card card-shadow mb-8">
+            <CardHeader className="pb-6">
+              <CardTitle className="flex items-center text-2xl">
+                <span className="bg-gray-900 text-white rounded-full w-12 h-12 flex items-center justify-center text-lg font-bold mr-4">
                   {currentStep + 1}
                 </span>
                 {steps[currentStep].title}
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-lg text-gray-600 ml-16">
                 {steps[currentStep].description}
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-0">
               <CurrentStepComponent
                 formData={formData}
                 setFormData={setFormData}
                 connected={connected}
                 publicKey={publicKey}
                 isAuthenticated={isAuthenticated}
+                calculatePortfolioAllocation={calculatePortfolioAllocation}
+                getPortfolioQuotes={getPortfolioQuotes}
+                createPortfolio={createPortfolio}
+                jupiterLoading={isSwapLoading}
               />
             </CardContent>
           </Card>
@@ -165,26 +202,26 @@ export function OnboardingFlow({ onComplete, onBack }: OnboardingFlowProps) {
             <Button
               variant="outline"
               onClick={handleBack}
-              className="flex items-center"
+              className="flex items-center px-8 py-3 text-base"
               disabled={isCreating}
             >
-              <ArrowLeft className="mr-2 h-4 w-4" />
+              <ArrowLeft className="mr-2 h-5 w-5" />
               Back
             </Button>
             <Button
               onClick={handleNext}
-              disabled={!canProceed() || isCreating}
-              className="flex items-center"
+              disabled={!canProceed() || isCreating || isSwapLoading}
+              className="flex items-center px-8 py-3 text-base bg-gray-900 hover:bg-gray-800"
             >
               {isCreating ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating Profile...
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Creating Portfolio...
                 </>
               ) : (
                 <>
                   {currentStep === steps.length - 1 ? "Complete Setup" : "Next"}
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  <ArrowRight className="ml-2 h-5 w-5" />
                 </>
               )}
             </Button>
@@ -356,6 +393,120 @@ function InvestmentStep({ formData, setFormData }: any) {
   )
 }
 
+function PortfolioPreviewStep({ formData, calculatePortfolioAllocation, getPortfolioQuotes, jupiterLoading }: any) {
+  const [allocation, setAllocation] = useState<any[]>([]);
+  const [quotes, setQuotes] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchAllocationAndQuotes = async () => {
+      try {
+        const allocationResult = calculatePortfolioAllocation(formData.riskTolerance, formData.initialInvestment);
+        setAllocation(allocationResult);
+
+        const quotesResult = await getPortfolioQuotes(allocationResult);
+        setQuotes(quotesResult);
+      } catch (err) {
+        setError('Failed to fetch portfolio allocation or quotes.');
+        console.error(err);
+      }
+    };
+
+    fetchAllocationAndQuotes();
+  }, [calculatePortfolioAllocation, getPortfolioQuotes, formData.riskTolerance, formData.initialInvestment]);
+
+  if (jupiterLoading) {
+    return (
+      <div className="text-center py-12">
+        <Loader2 className="h-12 w-12 text-gray-600 animate-spin mx-auto" />
+        <p className="text-lg text-gray-600 mt-4">Calculating portfolio allocation...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12 text-red-600">
+        <p>{error}</p>
+      </div>
+    );
+  }
+
+  if (!allocation.length) {
+    return (
+      <div className="text-center py-12 text-gray-600">
+        <p>No portfolio allocation available.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <div className="text-center">
+        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <PieChart className="h-8 w-8 text-gray-600" />
+        </div>
+        <h3 className="text-2xl font-bold mb-2">Portfolio Preview</h3>
+        <p className="text-gray-600">
+          Review your portfolio allocation based on risk level {formData.riskTolerance}
+        </p>
+        
+        {/* Test xStock availability button */}
+        <div className="mt-4">
+          <Button
+            onClick={async () => {
+              console.log('🔍 Testing xStock availability...');
+              // This will be available once we pass the test function down
+            }}
+            variant="outline"
+            size="sm"
+            className="text-xs"
+          >
+            Test xStock Availability
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {allocation.map((item: any, index: number) => (
+          <div key={index} className="bg-gray-50 rounded-lg p-6">
+            <div className="flex justify-between items-start mb-4">
+              <h4 className="font-bold text-lg">{item.symbol}</h4>
+              <Badge className="bg-gray-200 text-gray-900">{item.allocation}%</Badge>
+            </div>
+            <div className="space-y-2 text-sm text-gray-600">
+              <div className="flex justify-between">
+                <span>USDC Amount:</span>
+                <span className="font-medium">${item.usdcAmount.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Est. Tokens:</span>
+                <span className="font-medium">{item.estimatedTokens || 'Loading...'}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+        <div className="flex items-start gap-3">
+          <div className="w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+            <span className="text-blue-800 text-sm font-bold">i</span>
+          </div>
+          <div>
+            <p className="text-blue-800 font-medium mb-1">Portfolio Summary</p>
+            <p className="text-blue-700 text-sm">
+              Total Investment: <strong>${formData.initialInvestment} USDC</strong><br/>
+              Risk Level: <strong>{formData.riskTolerance}/10</strong><br/>
+              Stocks: <strong>{allocation.length} different companies</strong>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PortfolioSetupStep({ formData, setFormData }: any) {
   return (
     <div className="space-y-6">
@@ -401,52 +552,99 @@ function PortfolioSetupStep({ formData, setFormData }: any) {
   )
 }
 
-function ReviewStep({ formData, connected, publicKey }: any) {
+function ExecuteTradesStep({ formData, connected, publicKey, createPortfolio, jupiterLoading, calculatePortfolioAllocation }: any) {
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const handleExecuteTrades = async () => {
+    setIsExecuting(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const allocation = calculatePortfolioAllocation(formData.riskTolerance, formData.initialInvestment);
+      const result = await createPortfolio(allocation);
+
+      if (result.success) {
+        setSuccess('Portfolio created successfully!');
+        // Optionally, redirect to dashboard or show a success message
+      } else {
+        throw new Error(result.error || 'Failed to create portfolio');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError('Failed to execute trades: ' + errorMessage);
+      console.error(err);
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h3 className="text-lg font-semibold mb-2">Review Your Settings</h3>
+        <h3 className="text-lg font-semibold mb-2">Execute Trades</h3>
         <p className="text-gray-600">
-          Please review your portfolio configuration before proceeding
+          Create your portfolio with the settings you've chosen.
         </p>
       </div>
 
-      <div className="space-y-4">
-        <div className="bg-gray-50 rounded-lg p-4">
-          <h4 className="font-medium mb-3">Portfolio Summary</h4>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span>Portfolio Name:</span>
-              <span className="font-medium">{formData.portfolioName}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Risk Level:</span>
-              <span className="font-medium">{formData.riskTolerance}/10</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Initial Investment:</span>
-              <span className="font-medium">${formData.initialInvestment} USDC</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Rebalancing:</span>
-              <span className="font-medium capitalize">{formData.rebalanceFrequency}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Wallet:</span>
-              <span className="font-medium font-mono">
-                {publicKey ? `${publicKey.toString().slice(0, 8)}...${publicKey.toString().slice(-8)}` : 'Not connected'}
-              </span>
-            </div>
+      {/* Demo Mode Notice */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <div className="w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+            <span className="text-blue-800 text-sm font-bold">ℹ</span>
+          </div>
+          <div>
+            <p className="text-blue-800 font-medium mb-1">Demo Mode</p>
+            <p className="text-blue-700 text-sm">
+              This demo uses <strong>mock portfolio creation</strong> since real xStock tokens from Backed Finance 
+              may not be available on Jupiter DEX yet. In production, this would execute actual swaps to purchase 
+              tokenized stocks.
+            </p>
           </div>
         </div>
+      </div>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-blue-800 text-sm">
-            <strong>Ready to start!</strong> Your portfolio will be created with these settings. 
-            You can modify them later in the settings page.
-          </p>
+      <div className="flex justify-center">
+        <Button
+          onClick={handleExecuteTrades}
+          disabled={!connected || !publicKey || isExecuting || jupiterLoading}
+          className="flex items-center px-8 py-3 text-base bg-green-600 hover:bg-green-700"
+        >
+          {isExecuting ? (
+            <>
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              Creating Portfolio...
+            </>
+          ) : (
+            <>
+              <CheckCircle className="mr-2 h-5 w-5" />
+              Create Demo Portfolio
+            </>
+          )}
+        </Button>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
+          <p>{error}</p>
         </div>
+      )}
+
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-800">
+          <p>{success}</p>
+        </div>
+      )}
+
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+        <p className="text-amber-800 text-sm">
+          <strong>Note:</strong> This is a demonstration of the portfolio creation flow. 
+          In production, you would need sufficient USDC balance and the xStock tokens would 
+          need to be available on Jupiter DEX for actual trading.
+        </p>
       </div>
     </div>
-  )
+  );
 }

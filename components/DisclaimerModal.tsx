@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { AlertTriangle, Shield, FileText, TrendingUp } from "lucide-react"
+import { AlertTriangle, Shield, FileText, TrendingUp, DollarSign, Users, Globe } from "lucide-react"
 
 interface DisclaimerModalProps {
   isOpen: boolean
@@ -52,215 +52,231 @@ export function DisclaimerModal({ isOpen, onClose, onAccept }: DisclaimerModalPr
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh] p-0">
-        <DialogHeader className="p-6 pb-0">
-          <DialogTitle className="text-2xl font-bold tracking-tight">
+      <DialogContent className="max-w-4xl max-h-[90vh] p-0 bg-white">
+        <DialogHeader className="px-8 pt-8 pb-6 bg-gray-50 border-b border-gray-200">
+          <DialogTitle className="text-3xl font-bold tracking-tight text-gray-900">
             Terms of Service & Risk Disclosure
           </DialogTitle>
+          <p className="text-lg text-gray-600 mt-2">
+            Please read carefully and scroll to the bottom to continue
+          </p>
         </DialogHeader>
         
         <ScrollArea 
           ref={scrollAreaRef}
-          className="px-6 h-96"
+          className="px-8 h-[400px]"
           onScrollCapture={handleScroll}
         >
-          <div className="space-y-6 pb-6">
-            {/* Warning Section */}
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h3 className="font-semibold text-amber-800 mb-2">Important Warning</h3>
-                  <p className="text-sm text-amber-700">
-                    Trading in tokenized securities involves significant risk of loss. You may lose some or all of your investment. 
-                    Past performance does not guarantee future results.
+          <div className="space-y-8 pb-6">
+            {/* Platform Overview */}
+            <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
+              <div className="flex items-center gap-3 pb-4 border-b border-gray-300">
+                <TrendingUp className="h-6 w-6 text-gray-700" />
+                <h3 className="font-bold text-xl text-gray-900">PLATFORM OVERVIEW</h3>
+              </div>
+              
+              <div className="space-y-4 mt-6">
+                <div className="bg-white border border-gray-200 rounded-lg p-5">
+                  <h4 className="font-semibold text-gray-900 mb-3">WHAT IS SOLSTOCK?</h4>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    SolStock is an AI-powered robo-advisor platform that enables automated investment in tokenized stocks (xStocks) 
+                    on the Solana blockchain. The platform uses algorithmic portfolio management to diversify investments based on 
+                    your risk tolerance.
+                  </p>
+                </div>
+                
+                <div className="bg-white border border-gray-200 rounded-lg p-5">
+                  <h4 className="font-semibold text-gray-900 mb-3">XSTOCKS EXPLAINED</h4>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    xStocks are tokenized representations of real stocks, backed 1:1 by actual shares held in regulated custody 
+                    by Backed Finance AG. Each token represents fractional ownership in the underlying stock and tracks its price performance.
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Investment Risks */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <TrendingUp className="h-5 w-5 text-gray-600" />
-                <h3 className="font-semibold text-lg">Investment Risks</h3>
+            {/* Risk Disclosure */}
+            <div className="bg-red-50 rounded-lg p-6 border border-red-200">
+              <div className="flex items-center gap-3 pb-4 border-b border-red-300">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+                <h3 className="font-bold text-xl text-red-900">RISK DISCLOSURE</h3>
               </div>
               
-              <div className="space-y-3 text-sm text-gray-600">
-                <p>
-                  <strong>Market Risk:</strong> The value of your portfolio may fluctuate significantly based on market conditions. 
-                  Stock prices can be volatile and unpredictable.
-                </p>
+              <div className="space-y-4 mt-6">
+                <div className="bg-white border border-red-200 rounded-lg p-5">
+                  <h4 className="font-semibold text-red-900 mb-3">INVESTMENT RISKS</h4>
+                  <p className="text-sm text-gray-700 leading-relaxed mb-3">
+                    <strong className="text-red-800">All investments carry significant risk of loss.</strong> Stock prices can be volatile 
+                    and may decline rapidly due to market conditions, economic factors, or company-specific events.
+                  </p>
+                  <ul className="text-sm text-gray-700 space-y-1 ml-4">
+                    <li>• You may lose some or all of your invested capital</li>
+                    <li>• Past performance does not guarantee future results</li>
+                    <li>• Market volatility can cause significant portfolio fluctuations</li>
+                    <li>• Automated rebalancing may not prevent losses</li>
+                  </ul>
+                </div>
                 
-                <p>
-                  <strong>Technology Risk:</strong> This platform operates on blockchain technology which is still evolving. 
-                  Smart contracts, while audited, may contain bugs or vulnerabilities.
-                </p>
+                <div className="bg-white border border-red-200 rounded-lg p-5">
+                  <h4 className="font-semibold text-red-900 mb-3">BLOCKCHAIN & TECHNICAL RISKS</h4>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    Trading on blockchain networks involves additional risks including smart contract vulnerabilities, 
+                    network congestion, transaction failures, and potential loss of funds due to technical issues or user error.
+                  </p>
+                </div>
                 
-                <p>
-                  <strong>Liquidity Risk:</strong> Tokenized securities may have limited liquidity compared to traditional markets. 
-                  You may not be able to sell your positions when desired.
-                </p>
-                
-                <p>
-                  <strong>Regulatory Risk:</strong> The regulatory environment for tokenized securities is evolving. 
-                  Changes in regulations could affect the platform's operations.
-                </p>
-                
-                <p>
-                  <strong>Counterparty Risk:</strong> This platform relies on third-party custodians and service providers. 
-                  Their failure could impact your investments.
-                </p>
-              </div>
-            </div>
-
-            {/* Platform Specifics */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Shield className="h-5 w-5 text-gray-600" />
-                <h3 className="font-semibold text-lg">Platform Information</h3>
-              </div>
-              
-              <div className="space-y-3 text-sm text-gray-600">
-                <p>
-                  <strong>Tokenized Securities:</strong> The stocks in your portfolio are represented by tokens backed 1:1 by real shares 
-                  held in regulated custody by Backed Finance AG in Switzerland.
-                </p>
-                
-                <p>
-                  <strong>Automated Management:</strong> Your portfolio will be automatically rebalanced according to your selected risk profile. 
-                  You can change your risk level at any time.
-                </p>
-                
-                <p>
-                  <strong>Fees:</strong> A management fee of 0.1% annually is charged on your portfolio value. 
-                  Additional network fees may apply for blockchain transactions.
-                </p>
-                
-                <p>
-                  <strong>Custody:</strong> Your tokens are held in your own wallet. You maintain full control and custody of your assets.
-                </p>
+                <div className="bg-white border border-red-200 rounded-lg p-5">
+                  <h4 className="font-semibold text-red-900 mb-3">REGULATORY RISKS</h4>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    Cryptocurrency and tokenized securities regulations are evolving. Changes in laws or regulations could 
+                    affect the platform's operations, token values, or your ability to trade.
+                  </p>
+                </div>
               </div>
             </div>
 
             {/* Regulatory Compliance */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <FileText className="h-5 w-5 text-gray-600" />
-                <h3 className="font-semibold text-lg">Regulatory Compliance</h3>
+            <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
+              <div className="flex items-center gap-3 pb-4 border-b border-blue-300">
+                <Globe className="h-6 w-6 text-blue-600" />
+                <h3 className="font-bold text-xl text-blue-900">REGULATORY COMPLIANCE</h3>
               </div>
               
-              <div className="space-y-3 text-sm text-gray-600">
-                <p>
-                  <strong>Eligibility:</strong> This service is not available to US persons or residents of restricted jurisdictions. 
-                  By proceeding, you confirm you are not a US person.
-                </p>
+              <div className="space-y-4 mt-6">
+                <div className="bg-white border border-blue-200 rounded-lg p-5">
+                  <h4 className="font-semibold text-blue-900 mb-3">GEOGRAPHIC RESTRICTIONS</h4>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    <strong className="text-blue-800">This platform is NOT available to US persons.</strong> By using this service, 
+                    you confirm that you are not a US citizen, resident, or entity, and are not accessing the platform from within the United States.
+                  </p>
+                </div>
                 
-                <p>
-                  <strong>KYC/AML:</strong> While we don't collect personal information, the underlying token issuers may have 
-                  compliance requirements that could affect your ability to trade.
-                </p>
-                
-                <p>
-                  <strong>Tax Implications:</strong> You are responsible for understanding and complying with tax obligations 
-                  in your jurisdiction related to cryptocurrency and securities trading.
-                </p>
+                <div className="bg-white border border-blue-200 rounded-lg p-5">
+                  <h4 className="font-semibold text-blue-900 mb-3">COMPLIANCE REQUIREMENTS</h4>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    You must comply with all applicable laws and regulations in your jurisdiction. It is your responsibility 
+                    to ensure that your use of this platform is legal in your country of residence.
+                  </p>
+                </div>
               </div>
             </div>
 
-            {/* Terms of Service */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-lg">Terms of Service</h3>
+            {/* Terms of Service Section */}
+            <div className="bg-gray-50 rounded-lg p-6">
+              <div className="flex items-center gap-3 pb-4 border-b border-gray-300">
+                <FileText className="h-6 w-6 text-gray-700" />
+                <h3 className="font-bold text-xl text-gray-900">TERMS OF SERVICE</h3>
+              </div>
               
-              <div className="space-y-3 text-sm text-gray-600">
-                <p>
-                  By using this platform, you agree to our terms of service and acknowledge that you have read and understood 
-                  all risks associated with trading tokenized securities.
-                </p>
+              <div className="space-y-4 mt-6">
+                <div className="bg-white border border-gray-200 rounded-lg p-5">
+                  <h4 className="font-semibold text-gray-900 mb-3">ACCEPTANCE OF TERMS</h4>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    By using this platform, you agree to be bound by these terms of service and all applicable laws and regulations. 
+                    If you do not agree with any of these terms, you are prohibited from using the platform.
+                  </p>
+                </div>
                 
-                <p>
-                  You confirm that you are of legal age in your jurisdiction and have the authority to enter into this agreement.
-                </p>
+                <div className="bg-white border border-gray-200 rounded-lg p-5">
+                  <h4 className="font-semibold text-gray-900 mb-3">PLATFORM USAGE</h4>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    You may use the platform solely for lawful investment purposes. You agree not to use the platform for any 
+                    illegal activities, market manipulation, or in violation of any applicable regulations.
+                  </p>
+                </div>
                 
-                <p>
-                  The platform is provided "as is" without warranties of any kind. We are not liable for any losses you may incur.
-                </p>
+                <div className="bg-white border border-gray-200 rounded-lg p-5">
+                  <h4 className="font-semibold text-gray-900 mb-3">INVESTMENT RESPONSIBILITY</h4>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    You acknowledge that all investment decisions are made at your own risk and discretion. The platform provides 
+                    automated portfolio management tools, but you remain fully responsible for your investment outcomes.
+                    You represent that you have sufficient knowledge and experience in financial matters to evaluate the risks and merits of this investment. 
+                    <strong>You should not invest more than you can afford to lose.</strong>
+                  </p>
+                </div>
                 
-                <p>
-                  You agree to use the platform only for lawful purposes and in accordance with all applicable laws and regulations.
-                </p>
+                <div className="bg-white border border-gray-200 rounded-lg p-5">
+                  <h4 className="font-semibold text-gray-900 mb-3">LIMITATION OF LIABILITY</h4>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    To the maximum extent permitted by law, we shall not be liable for any indirect, incidental, special, consequential, 
+                    or punitive damages arising from your use of this platform or any investment losses.
+                  </p>
+                </div>
               </div>
             </div>
 
-            {/* Scroll indicator */}
-            {!hasScrolledToBottom && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-sm text-blue-700 text-center">
-                  Please scroll to the bottom to continue
-                </p>
-              </div>
-            )}
+            {/* Final Acknowledgment */}
+            <div className="bg-gray-900 text-white rounded-lg p-6">
+              <h3 className="font-bold text-white mb-4 text-lg">FINAL ACKNOWLEDGMENT</h3>
+              <p className="text-gray-300 leading-relaxed">
+                By proceeding, you acknowledge that you have read and understood all the risks, terms, and conditions outlined above. 
+                You confirm that you are making an informed decision to use this platform and accept full responsibility for your investment decisions.
+              </p>
+            </div>
           </div>
         </ScrollArea>
-
-        {/* Checkboxes and Actions */}
-        <div className="p-6 pt-0 space-y-4 border-t border-gray-200">
-          <div className="space-y-3">
-            <div className="flex items-start space-x-3">
-                             <Checkbox 
-                 id="terms"
-                 checked={termsAccepted}
-                 onCheckedChange={(checked) => setTermsAccepted(checked as boolean)}
-                 disabled={!hasScrolledToBottom}
-                 className="mt-1"
-               />
-              <label htmlFor="terms" className="text-sm text-gray-700 leading-relaxed">
-                I have read and agree to the Terms of Service and understand that this platform is not available to US persons.
+        
+        {/* Acceptance Checkboxes */}
+        <div className="px-8 py-6 bg-gray-50 border-t border-gray-200">
+          <div className="space-y-4 mb-6">
+            <div className="flex items-start gap-3">
+              <Checkbox 
+                id="terms" 
+                checked={termsAccepted}
+                onCheckedChange={(checked) => setTermsAccepted(checked as boolean)}
+                className="mt-1"
+              />
+              <label htmlFor="terms" className="text-sm font-medium text-gray-900 leading-relaxed">
+                I have read and agree to the <strong>Terms of Service</strong> and understand the platform's operations
               </label>
             </div>
             
-            <div className="flex items-start space-x-3">
-                             <Checkbox 
-                 id="risks"
-                 checked={risksAccepted}
-                 onCheckedChange={(checked) => setRisksAccepted(checked as boolean)}
-                 disabled={!hasScrolledToBottom}
-                 className="mt-1"
-               />
-              <label htmlFor="risks" className="text-sm text-gray-700 leading-relaxed">
-                I acknowledge and accept all investment risks including potential loss of capital.
+            <div className="flex items-start gap-3">
+              <Checkbox 
+                id="risks" 
+                checked={risksAccepted}
+                onCheckedChange={(checked) => setRisksAccepted(checked as boolean)}
+                className="mt-1"
+              />
+              <label htmlFor="risks" className="text-sm font-medium text-gray-900 leading-relaxed">
+                I acknowledge and accept all <strong>investment risks</strong> including potential total loss of capital
               </label>
             </div>
             
-            <div className="flex items-start space-x-3">
-                             <Checkbox 
-                 id="regulatory"
-                 checked={regulatoryAccepted}
-                 onCheckedChange={(checked) => setRegulatoryAccepted(checked as boolean)}
-                 disabled={!hasScrolledToBottom}
-                 className="mt-1"
-               />
-              <label htmlFor="regulatory" className="text-sm text-gray-700 leading-relaxed">
-                I understand my tax and regulatory obligations in my jurisdiction.
+            <div className="flex items-start gap-3">
+              <Checkbox 
+                id="regulatory" 
+                checked={regulatoryAccepted}
+                onCheckedChange={(checked) => setRegulatoryAccepted(checked as boolean)}
+                className="mt-1"
+              />
+              <label htmlFor="regulatory" className="text-sm font-medium text-gray-900 leading-relaxed">
+                I confirm I am <strong>not a US person</strong> and am legally permitted to use this service
               </label>
             </div>
           </div>
           
-          <div className="flex gap-3 pt-4">
-            <Button 
-              variant="outline" 
-              onClick={handleClose}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleAccept}
-              disabled={!canProceed}
-              className="flex-1 bg-gray-900 hover:bg-gray-800"
-            >
-              Accept & Continue
-            </Button>
+          <div className="flex justify-between items-center">
+            <div className="text-sm text-gray-500">
+              {!hasScrolledToBottom && "Please scroll to the bottom to continue"}
+              {hasScrolledToBottom && !canProceed && "Please accept all terms to continue"}
+            </div>
+            <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                onClick={handleClose}
+                className="px-6"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleAccept}
+                disabled={!canProceed}
+                className="px-8 bg-gray-900 hover:bg-gray-800 text-white"
+              >
+                Accept & Continue
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

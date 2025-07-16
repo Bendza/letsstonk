@@ -15,8 +15,9 @@ export const XStockSchema = z.object({
   logoURI: z.string().optional(),
   tags: z.array(z.string()),
   daily_volume: z.number().optional(),
-  freeze_authority: z.string().nullable(),
-  mint_authority: z.string().nullable(),
+  market_cap: z.number().optional(),
+  freeze_authority: z.string().nullable().optional(),
+  mint_authority: z.string().nullable().optional(),
 })
 
 // Core types

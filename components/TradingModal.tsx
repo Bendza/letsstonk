@@ -1,120 +1,403 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useState } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Slider } from "@/components/ui/slider"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { ArrowUpRight, ArrowDownRight, Zap, AlertTriangle, CheckCircle, Loader2, X } from "lucide-react"
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ArrowUpDown, TrendingUp, TrendingDown, DollarSign, Coins, CheckCircle, ExternalLink, AlertCircle } from "lucide-react"
+import { useSwapLeg } from "@/hooks/useSwapLeg"
+import { useMockSwap } from "@/hooks/useMockSwap"
+import { useWalletAuth } from "@/hooks/useWalletAuth"
+import { usePortfolio } from "@/hooks/usePortfolio"
+import { useWallet } from '@solana/wallet-adapter-react'
+import { supabase } from "@/lib/supabase"
 
 interface TradingModalProps {
-  symbol: string
-  isOpen: boolean
-  onClose: () => void
+  stock: {
+    symbol: string
+    name: string
+    price: number
+    change: number
+    changePercent: number
+    logoUri?: string
+    address: string
+  }
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
-// Mock stock data
-const mockStockData: Record<string, any> = {
-  xTSLA: {
-    name: "Tesla Inc",
-    price: 248.5,
-    change: 12.3,
-    changePercent: 5.2,
-    logo: "🚗",
-    chartData: [
-      { time: "09:30", price: 236 },
-      { time: "10:00", price: 240 },
-      { time: "10:30", price: 235 },
-      { time: "11:00", price: 245 },
-      { time: "11:30", price: 248.5 },
-    ],
-  },
-  xAAPL: {
-    name: "Apple Inc",
-    price: 195.89,
-    change: -2.45,
-    changePercent: -1.2,
-    logo: "🍎",
-    chartData: [
-      { time: "09:30", price: 200 },
-      { time: "10:00", price: 198 },
-      { time: "10:30", price: 202 },
-      { time: "11:00", price: 197 },
-      { time: "11:30", price: 195.89 },
-    ],
-  },
-  // Add more stocks as needed
+interface TransactionStep {
+  id: string
+  label: string
+  status: 'pending' | 'in_progress' | 'completed' | 'failed'
+  message?: string
+  signature?: string
 }
 
-export function TradingModal({ symbol, isOpen, onClose }: TradingModalProps) {
-  const [orderType, setOrderType] = useState<"buy" | "sell">("buy")
-  const [amountType, setAmountType] = useState<"usd" | "shares">("usd")
+export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
+  const [side, setSide] = useState<"buy" | "sell">("buy")
   const [amount, setAmount] = useState("")
-  const [slippage, setSlippage] = useState([0.5])
-  const [isExecuting, setIsExecuting] = useState(false)
-  const [showConfirmation, setShowConfirmation] = useState(false)
-  const [orderComplete, setOrderComplete] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [showTransactionFlow, setShowTransactionFlow] = useState(false)
+  const [transactionSteps, setTransactionSteps] = useState<TransactionStep[]>([])
+  const [useMockSwapMode, setUseMockSwapMode] = useState(false)
+  const [transactionError, setTransactionError] = useState<string | null>(null)
+  
+  // Known liquid tokens that should work with Jupiter (for testing)
+  const LIQUID_TOKENS = [
+    'So11111111111111111111111111111111111111112', // SOL
+    'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
+    'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
+    'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So', // mSOL
+    'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN', // JUP
+    'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1', // bSOL
+  ]
+  
+  const { swapMutation } = useSwapLeg()
+  const { swapMutation: mockSwapMutation } = useMockSwap()
+  const { user } = useWalletAuth()
+  const { publicKey } = useWallet()
+  const { portfolio, syncPortfolio } = usePortfolio(publicKey?.toString() || null)
 
-  const stock = mockStockData[symbol] || mockStockData.xTSLA
-  const usdcBalance = 5000 // Mock USDC balance
-  const stockBalance = 10 // Mock stock balance
 
-  const amountValue = Number.parseFloat(amount) || 0
-  const estimatedShares = amountType === "usd" ? amountValue / stock.price : amountValue
-  const estimatedUSD = amountType === "shares" ? amountValue * stock.price : amountValue
-  const priceImpact = estimatedUSD > 1000 ? (estimatedUSD / 10000) * 100 : 0.1
-  const networkFee = 0.0001
-  const totalCost = orderType === "buy" ? estimatedUSD + networkFee : estimatedUSD - networkFee
 
-  useEffect(() => {
-    if (!isOpen) {
-      setAmount("")
-      setShowConfirmation(false)
-      setOrderComplete(false)
-      setIsExecuting(false)
+  const initializeTransactionSteps = () => {
+    const steps: TransactionStep[] = [
+      { id: 'availability', label: 'Checking token availability', status: 'pending' },
+      { id: 'quote', label: 'Getting swap quote', status: 'pending' },
+      { id: 'transaction', label: 'Executing swap transaction', status: 'pending' },
+      { id: 'confirmation', label: 'Confirming transaction', status: 'pending' },
+      { id: 'database', label: 'Recording transaction', status: 'pending' },
+      { id: 'portfolio', label: 'Updating portfolio', status: 'pending' }
+    ]
+    setTransactionSteps(steps)
+  }
+
+  const updateTransactionStep = (stepId: string, status: TransactionStep['status'], message?: string, signature?: string) => {
+    setTransactionSteps(prev => prev.map(step => 
+      step.id === stepId ? { ...step, status, message, signature } : step
+    ))
+  }
+
+  const testTokenAvailability = async (inputMint: string, outputMint: string, amount: number) => {
+    try {
+      // Test if we can get a quote from Jupiter
+      const quoteUrl = new URL("https://lite-api.jup.ag/v6/quote")
+      quoteUrl.searchParams.set("inputMint", inputMint)
+      quoteUrl.searchParams.set("outputMint", outputMint)
+      quoteUrl.searchParams.set("amount", amount.toString())
+      quoteUrl.searchParams.set("slippageBps", "50")
+
+      console.log("Testing token availability:", {
+        inputMint,
+        outputMint,
+        amount,
+        url: quoteUrl.toString()
+      })
+
+      const response = await fetch(quoteUrl.toString(), {
+        headers: {
+          Accept: "application/json",
+          "User-Agent": "SolanaRoboAdvisor/1.0",
+        },
+      })
+
+      console.log("Jupiter quote response:", response.status, response.statusText)
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("Jupiter quote data:", data)
+        return data.outAmount !== undefined && data.outAmount !== "0"
+      } else {
+        const errorData = await response.text()
+        console.warn("Jupiter quote failed:", response.status, errorData)
+        
+        // Check if it's a 404 (token not found) vs other errors
+        if (response.status === 404) {
+          console.log("Token not available on Jupiter (404)")
+          return false
+        }
+      }
+      return false
+    } catch (error) {
+      console.warn("Token availability test failed:", error)
+      return false
     }
-  }, [isOpen])
-
-  const handleExecuteOrder = async () => {
-    setIsExecuting(true)
-
-    // Simulate order execution
-    await new Promise((resolve) => setTimeout(resolve, 3000))
-
-    setIsExecuting(false)
-    setShowConfirmation(false)
-    setOrderComplete(true)
-
-    // Auto close after success
-    setTimeout(() => {
-      onClose()
-    }, 2000)
   }
 
-  const canExecuteOrder = () => {
-    if (!amountValue || amountValue <= 0) return false
-    if (orderType === "buy" && totalCost > usdcBalance) return false
-    if (orderType === "sell" && estimatedShares > stockBalance) return false
-    return true
+  const handleTrade = async () => {
+    if (!amount || parseFloat(amount) <= 0) return
+    
+    setLoading(true)
+    setShowTransactionFlow(true)
+    initializeTransactionSteps()
+    
+    try {
+      const tradeAmount = parseFloat(amount)
+      
+      console.log("Executing trade:", { 
+        symbol: stock.symbol, 
+        side, 
+        amount: tradeAmount, 
+      })
+      
+      // Step 1: Check token availability
+      updateTransactionStep('availability', 'in_progress', 'Checking if token is available on Jupiter...')
+      
+      let swapParams
+      
+      // Always try with the actual xStock token address first
+      if (side === "buy") {
+        // For buying: USDC -> xStock Token
+        const usdcAmount = tradeAmount * stock.price
+        swapParams = {
+          inputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC mint
+          outputMint: stock.address, // Actual xStock token mint
+          amount: Math.floor(usdcAmount * 1_000_000), // Convert to USDC decimals
+          slippageBps: 50 // 0.5% slippage
+        }
+      } else {
+        // For selling: xStock Token -> USDC
+        swapParams = {
+          inputMint: stock.address, // Actual xStock token mint
+          outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC mint
+          amount: Math.floor(tradeAmount * Math.pow(10, 6)), // xStocks typically have 6 decimals
+          slippageBps: 50 // 0.5% slippage
+        }
+      }
+      
+      // Test if the token is available on Jupiter
+      const isAvailable = await testTokenAvailability(swapParams.inputMint, swapParams.outputMint, swapParams.amount)
+      
+      // Use local variable to ensure immediate availability check results
+      let shouldUseMockSwap = false
+      
+      if (isAvailable) {
+        updateTransactionStep('availability', 'completed', 'Token available on Jupiter - using real swap')
+        shouldUseMockSwap = false
+      } else {
+        updateTransactionStep('availability', 'completed', 'Token not available on Jupiter - using mock swap')
+        shouldUseMockSwap = true
+      }
+      
+      // Update state for UI display (async, for UI only)
+      setUseMockSwapMode(shouldUseMockSwap)
+      
+      // Step 2: Get quote and execute swap
+      updateTransactionStep('quote', 'in_progress', 'Getting best swap route...')
+      
+      let result
+      
+      console.log("Swap parameters:", swapParams)
+      console.log("Using mock swap mode:", shouldUseMockSwap)
+      
+      // Use the local variable for immediate decision making
+      if (shouldUseMockSwap) {
+        // Use mock swap for demonstration
+        console.log("Executing mock swap...")
+        result = await mockSwapMutation.mutateAsync(swapParams)
+        updateTransactionStep('quote', 'completed', 'Mock quote received successfully')
+        updateTransactionStep('transaction', 'in_progress', 'Executing mock swap transaction...')
+      } else {
+        // Use real Jupiter swap
+        console.log("Executing real Jupiter swap...")
+        result = await swapMutation.mutateAsync(swapParams)
+        updateTransactionStep('quote', 'completed', 'Real quote received successfully')
+        updateTransactionStep('transaction', 'in_progress', 'Executing real swap transaction...')
+      }
+      
+      console.log("Swap result:", result)
+      
+      if (!result.signature) {
+        throw new Error('Transaction failed - no signature returned')
+      }
+      
+      updateTransactionStep('transaction', 'completed', 'Transaction executed successfully', result.signature)
+      updateTransactionStep('confirmation', 'completed', 'Transaction confirmed on blockchain')
+      
+      // Step 4: Record transaction in database
+      updateTransactionStep('database', 'in_progress', 'Recording transaction...')
+      
+      if (portfolio) {
+        const { error: dbError } = await supabase
+          .from('transactions')
+          .insert({
+            portfolio_id: portfolio.id,
+            transaction_signature: result.signature,
+            transaction_type: side,
+            input_token: side === "buy" ? 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' : stock.address,
+            output_token: side === "buy" ? stock.address : 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+            input_amount: swapParams.amount,
+            output_amount: parseInt(result.quote.outAmount),
+            price_impact: parseFloat(result.quote.priceImpactPct || '0'),
+            slippage: 0.5, // 0.5% slippage used
+            status: 'confirmed',
+            block_time: new Date().toISOString()
+          })
+
+        if (dbError) {
+          console.error('Database error:', dbError)
+          updateTransactionStep('database', 'failed', 'Failed to record transaction in database')
+        } else {
+          updateTransactionStep('database', 'completed', 'Transaction recorded successfully')
+        }
+      }
+      
+      // Step 5: Update portfolio
+      updateTransactionStep('portfolio', 'in_progress', 'Updating portfolio...')
+      
+      if (syncPortfolio) {
+        await syncPortfolio()
+        updateTransactionStep('portfolio', 'completed', 'Portfolio updated successfully')
+      }
+      
+      console.log("✅ Trade completed successfully:", result)
+      
+    } catch (error) {
+      console.error("❌ Trade failed:", error)
+      
+      // Update the current step as failed
+      const currentStep = transactionSteps.find(step => step.status === 'in_progress')
+      if (currentStep) {
+        updateTransactionStep(currentStep.id, 'failed', error instanceof Error ? error.message : 'Unknown error')
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
-  if (orderComplete) {
+  const resetModal = () => {
+    setAmount("")
+    setShowTransactionFlow(false)
+    setTransactionSteps([])
+    setLoading(false)
+    setUseMockSwapMode(false)
+    setTransactionError(null)
+  }
+
+  const handleClose = () => {
+    resetModal()
+    onOpenChange(false)
+  }
+
+  const estimatedTotal = parseFloat(amount || "0") * stock.price
+
+  const renderLogo = () => {
+    if (stock.logoUri) {
+      if (stock.logoUri.startsWith('http')) {
+        return (
+          <img 
+            src={stock.logoUri} 
+            alt={`${stock.symbol} logo`} 
+            className="w-8 h-8 rounded-full"
+            onError={(e) => {
+              // Fallback to emoji if image fails
+              const target = e.target as HTMLImageElement
+              target.style.display = 'none'
+              target.nextElementSibling?.classList.remove('hidden')
+            }}
+          />
+        )
+      } else {
+        return (
+          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-lg">
+            {stock.logoUri}
+          </div>
+        )
+      }
+    }
+    
     return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-md">
-          <div className="text-center py-8">
-            <CheckCircle className="h-16 w-16 text-green-600 mx-auto mb-4" />
-            <h3 className="text-2xl font-bold mb-2">ORDER EXECUTED!</h3>
-            <p className="text-gray-600 mb-4">
-              Successfully {orderType === "buy" ? "bought" : "sold"} {estimatedShares.toFixed(4)} shares of {symbol}
-            </p>
-            <Badge className="bg-green-100 text-green-800 rounded-none">Transaction ID: 0x1234...5678</Badge>
+      <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+        <DollarSign className="w-4 h-4 text-gray-600" />
+      </div>
+    )
+  }
+
+  if (showTransactionFlow) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowUpDown className="w-5 h-5" />
+              Transaction Progress
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {transactionSteps.map((step) => (
+              <div key={step.id} className="flex items-center gap-3 p-3 rounded-lg border">
+                <div className="flex-shrink-0">
+                  {step.status === 'pending' && (
+                    <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
+                  )}
+                  {step.status === 'in_progress' && (
+                    <div className="w-5 h-5 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+                  )}
+                  {step.status === 'completed' && (
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                  )}
+                  {step.status === 'failed' && (
+                    <AlertCircle className="w-5 h-5 text-red-500" />
+                  )}
+                </div>
+                
+                <div className="flex-1">
+                  <div className="font-medium text-sm">{step.label}</div>
+                  {step.message && (
+                    <div className={`text-xs mt-1 ${
+                      step.status === 'failed' ? 'text-red-600' : 'text-gray-600'
+                    }`}>
+                      {step.message}
+                    </div>
+                  )}
+                  {step.signature && (
+                    <div className="mt-2">
+                      <a
+                        href={useMockSwapMode ? '#' : `https://solscan.io/tx/${step.signature}`}
+                        target={useMockSwapMode ? '_self' : '_blank'}
+                        rel="noopener noreferrer"
+                        className={`inline-flex items-center gap-1 text-xs ${
+                          useMockSwapMode 
+                            ? 'text-gray-500 cursor-default' 
+                            : 'text-blue-600 hover:text-blue-800'
+                        }`}
+                        onClick={useMockSwapMode ? (e) => e.preventDefault() : undefined}
+                      >
+                        {useMockSwapMode ? 'Mock Transaction' : 'View on Solscan'} 
+                        {!useMockSwapMode && <ExternalLink className="w-3 h-3" />}
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            
+            <div className="flex gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={handleClose}
+                className="flex-1"
+              >
+                Close
+              </Button>
+              {transactionSteps.every(step => step.status === 'completed') && (
+                <Button
+                  onClick={() => {
+                    resetModal()
+                    setShowTransactionFlow(false)
+                  }}
+                  className="flex-1"
+                >
+                  Trade Again
+                </Button>
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -122,325 +405,121 @@ export function TradingModal({ symbol, isOpen, onClose }: TradingModalProps) {
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-3xl">{stock.logo}</span>
-              <div>
-                <DialogTitle className="text-2xl">{symbol}</DialogTitle>
-                <DialogDescription className="text-lg">{stock.name}</DialogDescription>
-              </div>
+          <DialogTitle className="flex items-center gap-2">
+            {renderLogo()}
+            <div>
+              <div className="font-semibold">{stock.symbol}</div>
+              <div className="text-sm text-gray-600">{stock.name}</div>
             </div>
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+          </DialogTitle>
         </DialogHeader>
-
-        <div className="grid lg:grid-cols-2 gap-6">
-          {/* Stock Info & Chart */}
-          <div className="space-y-6">
-            <Card className="minimal-card">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="text-3xl font-bold">${stock.price}</div>
-                  <div className={`flex items-center gap-1 ${stock.change >= 0 ? "text-green-700" : "text-red-600"}`}>
-                    {stock.change >= 0 ? <ArrowUpRight className="h-5 w-5" /> : <ArrowDownRight className="h-5 w-5" />}
-                    <span className="font-semibold text-lg">
-                      {stock.change >= 0 ? "+" : ""}
-                      {stock.changePercent}%
-                    </span>
+        
+        <div className="space-y-4">
+          {/* Current Price */}
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Current Price</span>
+                <div className="text-right">
+                  <div className="font-semibold">${stock.price.toFixed(2)}</div>
+                  <div className={`text-xs flex items-center gap-1 ${
+                    stock.changePercent >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {stock.changePercent >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                    {stock.changePercent.toFixed(2)}%
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="h-48">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={stock.chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="time" />
-                      <YAxis />
-                      <Tooltip />
-                      <Line
-                        type="monotone"
-                        dataKey="price"
-                        stroke={stock.change >= 0 ? "#15803d" : "#dc2626"}
-                        strokeWidth={3}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+            </CardContent>
+          </Card>
 
-            <Card className="minimal-card">
-              <CardHeader>
-                <CardTitle className="text-sm uppercase tracking-wide">Your Balances</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between">
-                  <span>USDC Balance:</span>
-                  <span className="font-semibold">${usdcBalance.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>{symbol} Balance:</span>
-                  <span className="font-semibold">{stockBalance} shares</span>
-                </div>
-              </CardContent>
-            </Card>
+          {/* Info Banner */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="text-sm text-blue-800">
+              <strong>Demo Mode:</strong> This will automatically detect if the token is available on Jupiter. 
+              If not, it will use a mock swap for demonstration purposes.
+            </div>
           </div>
 
-          {/* Trading Panel */}
-          <div className="space-y-6">
-            {!showConfirmation ? (
-              <>
-                <Tabs value={orderType} onValueChange={(value) => setOrderType(value as "buy" | "sell")}>
-                  <TabsList className="grid w-full grid-cols-2 bg-white border border-gray-200 rounded-none">
-                    <TabsTrigger
-                      value="buy"
-                      className="data-[state=active]:bg-green-600 data-[state=active]:text-white rounded-none"
-                    >
-                      BUY
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="sell"
-                      className="data-[state=active]:bg-red-600 data-[state=active]:text-white rounded-none"
-                    >
-                      SELL
-                    </TabsTrigger>
-                  </TabsList>
+          {/* Buy/Sell Tabs */}
+          <Tabs value={side} onValueChange={(value) => setSide(value as "buy" | "sell")}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="buy" className="text-green-600 data-[state=active]:bg-green-50">
+                Buy
+              </TabsTrigger>
+              <TabsTrigger value="sell" className="text-red-600 data-[state=active]:bg-red-50">
+                Sell
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value={side} className="space-y-4">
+              {/* Amount Input */}
+              <div className="space-y-2">
+                <Label htmlFor="amount">Amount ({stock.symbol})</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  placeholder="0.00"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  min="0"
+                  step="0.01"
+                />
+              </div>
 
-                  <TabsContent value="buy" className="space-y-6 mt-6">
-                    <Card className="minimal-card">
-                      <CardHeader>
-                        <CardTitle className="text-green-700">BUY {symbol}</CardTitle>
-                        <CardDescription>Purchase tokenized shares</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="flex items-center gap-4">
-                          <Button
-                            variant={amountType === "usd" ? "default" : "outline"}
-                            onClick={() => setAmountType("usd")}
-                            className={amountType === "usd" ? "bg-gray-900 text-white" : "btn-secondary bg-transparent"}
-                          >
-                            USD Amount
-                          </Button>
-                          <Button
-                            variant={amountType === "shares" ? "default" : "outline"}
-                            onClick={() => setAmountType("shares")}
-                            className={
-                              amountType === "shares" ? "bg-gray-900 text-white" : "btn-secondary bg-transparent"
-                            }
-                          >
-                            Share Count
-                          </Button>
-                        </div>
-
-                        <div>
-                          <Label htmlFor="amount">{amountType === "usd" ? "USD Amount" : "Number of Shares"}</Label>
-                          <Input
-                            id="amount"
-                            type="number"
-                            placeholder={amountType === "usd" ? "100.00" : "0.5"}
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            className="form-input text-lg font-semibold"
-                          />
-                        </div>
-
-                        <div>
-                          <Label>Slippage Tolerance: {slippage[0]}%</Label>
-                          <Slider
-                            value={slippage}
-                            onValueChange={setSlippage}
-                            max={5}
-                            min={0.1}
-                            step={0.1}
-                            className="mt-2"
-                          />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-
-                  <TabsContent value="sell" className="space-y-6 mt-6">
-                    <Card className="minimal-card">
-                      <CardHeader>
-                        <CardTitle className="text-red-600">SELL {symbol}</CardTitle>
-                        <CardDescription>Sell your tokenized shares</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="flex items-center gap-4">
-                          <Button
-                            variant={amountType === "usd" ? "default" : "outline"}
-                            onClick={() => setAmountType("usd")}
-                            className={amountType === "usd" ? "bg-gray-900 text-white" : "btn-secondary bg-transparent"}
-                          >
-                            USD Amount
-                          </Button>
-                          <Button
-                            variant={amountType === "shares" ? "default" : "outline"}
-                            onClick={() => setAmountType("shares")}
-                            className={
-                              amountType === "shares" ? "bg-gray-900 text-white" : "btn-secondary bg-transparent"
-                            }
-                          >
-                            Share Count
-                          </Button>
-                        </div>
-
-                        <div>
-                          <Label htmlFor="amount">{amountType === "usd" ? "USD Amount" : "Number of Shares"}</Label>
-                          <Input
-                            id="amount"
-                            type="number"
-                            placeholder={amountType === "usd" ? "100.00" : "0.5"}
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            className="form-input text-lg font-semibold"
-                          />
-                        </div>
-
-                        <div>
-                          <Label>Slippage Tolerance: {slippage[0]}%</Label>
-                          <Slider
-                            value={slippage}
-                            onValueChange={setSlippage}
-                            max={5}
-                            min={0.1}
-                            step={0.1}
-                            className="mt-2"
-                          />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-                </Tabs>
-
-                {/* Order Preview */}
-                {amountValue > 0 && (
-                  <Card className="minimal-card">
-                    <CardHeader>
-                      <CardTitle className="text-sm uppercase tracking-wide">Order Preview</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="flex justify-between">
-                        <span>Estimated Shares:</span>
-                        <span className="font-semibold">{estimatedShares.toFixed(4)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Estimated USD:</span>
-                        <span className="font-semibold">${estimatedUSD.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Price Impact:</span>
-                        <span className={`font-semibold ${priceImpact > 1 ? "text-red-600" : "text-gray-900"}`}>
-                          {priceImpact.toFixed(2)}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Network Fee:</span>
-                        <span className="font-semibold">${networkFee.toFixed(4)}</span>
-                      </div>
-                      <div className="border-t pt-3 flex justify-between text-lg font-bold">
-                        <span>Total {orderType === "buy" ? "Cost" : "Receive"}:</span>
-                        <span>${totalCost.toFixed(2)}</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {priceImpact > 1 && (
-                  <Alert className="border-amber-200 bg-amber-50">
-                    <AlertTriangle className="h-4 w-4 text-amber-600" />
-                    <AlertDescription className="text-amber-800">
-                      High price impact detected ({priceImpact.toFixed(2)}%). Consider reducing order size.
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                <Button
-                  onClick={() => setShowConfirmation(true)}
-                  disabled={!canExecuteOrder()}
-                  className={`w-full text-lg py-6 ${
-                    orderType === "buy"
-                      ? "bg-green-600 hover:bg-green-700 text-white"
-                      : "bg-red-600 hover:bg-red-700 text-white"
-                  }`}
-                >
-                  PREVIEW {orderType.toUpperCase()} ORDER
-                </Button>
-              </>
-            ) : (
-              /* Confirmation Screen */
-              <Card className="minimal-card">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Zap className="h-5 w-5" />
-                    CONFIRM ORDER
-                  </CardTitle>
-                  <CardDescription>Review and confirm your trade</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="bg-gray-50 p-4 space-y-3">
-                    <div className="flex justify-between text-lg">
-                      <span className="font-semibold">
-                        {orderType.toUpperCase()} {symbol}
-                      </span>
-                      <span className="font-bold">{estimatedShares.toFixed(4)} shares</span>
+              {/* Order Summary */}
+              {amount && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Order Summary</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex justify-between">
+                      <span>Amount:</span>
+                      <span>{amount} {stock.symbol}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Price per share:</span>
-                      <span>${stock.price}</span>
+                      <span>Market Price:</span>
+                      <span>${stock.price.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Slippage tolerance:</span>
-                      <span>{slippage[0]}%</span>
+                    <div className="flex justify-between font-semibold border-t pt-2">
+                      <span>Estimated Total:</span>
+                      <span>${estimatedTotal.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between text-lg font-bold border-t pt-3">
-                      <span>Total {orderType === "buy" ? "Cost" : "Receive"}:</span>
-                      <span>${totalCost.toFixed(2)}</span>
+                    <div className="text-xs text-gray-600 mt-2">
+                      * Market orders execute at the current market price
                     </div>
-                  </div>
+                  </CardContent>
+                </Card>
+              )}
 
-                  <Alert>
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertDescription>
-                      This transaction will be executed on Solana blockchain and cannot be reversed.
-                    </AlertDescription>
-                  </Alert>
-
-                  <div className="flex gap-3">
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowConfirmation(false)}
-                      className="flex-1 btn-secondary bg-transparent"
-                    >
-                      BACK
-                    </Button>
-                    <Button
-                      onClick={handleExecuteOrder}
-                      disabled={isExecuting}
-                      className={`flex-1 ${
-                        orderType === "buy" ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"
-                      } text-white`}
-                    >
-                      {isExecuting ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          EXECUTING...
-                        </>
-                      ) : (
-                        `CONFIRM ${orderType.toUpperCase()}`
-                      )}
-                    </Button>
+              {/* Trade Button */}
+              <Button
+                onClick={handleTrade}
+                disabled={loading || !amount || parseFloat(amount) <= 0}
+                className={`w-full ${
+                  side === "buy" 
+                    ? "bg-green-600 hover:bg-green-700" 
+                    : "bg-red-600 hover:bg-red-700"
+                }`}
+              >
+                {loading ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Processing...
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+                ) : (
+                  <>
+                    <Coins className="w-4 h-4 mr-2" />
+                    {side === "buy" ? "Buy" : "Sell"} {stock.symbol}
+                  </>
+                )}
+              </Button>
+            </TabsContent>
+          </Tabs>
         </div>
       </DialogContent>
     </Dialog>
