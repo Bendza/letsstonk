@@ -54,7 +54,6 @@ export function MockWalletProvider({ children }: { children: React.ReactNode }) 
       }
 
       // Mock transaction signing
-      console.log("Mock signing transaction:", transaction)
       return {
         ...transaction,
         signatures: ["mock_signature_" + Date.now()],

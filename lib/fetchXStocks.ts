@@ -1,20 +1,31 @@
 import { supabase } from '@/lib/supabase'
 import { XStock } from './types'
 
-// Fallback prices (used if Jupiter API fails)
+// Fallback prices (used if Jupiter API fails) - Updated with all active xStocks
 const FALLBACK_PRICES: Record<string, number> = {
   "XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp": 228.5,  // AAPLx
   "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB": 405.2,  // TSLAx
   "XsCPL9dNWBMvFtTmwcCA5v3xWPSMEBCszbQdiLLq6aN": 178.3,  // GOOGLx
   "Xs3eBt7uRfJX8QUs4suhyU8p2M6DoUDrJyWBa8LLZsg": 185.4,  // AMZNx
-  "XsYdjDjNUygZ7yGKfQaB6TxLh2gC6RRjzLtLAGJrhzV": 165.25, // PGx
-  "XszvaiXGPwvk2nwb3o9C1CX4K6zH8sez11E6uyup6fe": 560.1,  // UNHx
-  "XsqgsbXwWogGJsNcVZ3TyVouy2MbTkfCFhCGGGcQZ2p": 292.85, // Vx
-  "Xs151QeqTCiuKtinzfRATnUESM2xTU6V9Wy8Vy538ci": 95.75   // WMTx
+  "XsYdjDjNUygZ7yGKfQaB6TxLh2gC6RRjzLtLAGJrhzV": 165.25, // PGx (if exists)
+  "XszvaiXGPwvk2nwb3o9C1CX4K6zH8sez11E6uyup6fe": 560.1,  // UNHx (if exists)
+  "XsqgsbXwWogGJsNcVZ3TyVouy2MbTkfCFhCGGGcQZ2p": 292.85, // Vx (if exists)
+  "Xs151QeqTCiuKtinzfRATnUESM2xTU6V9Wy8Vy538ci": 95.75,  // WMTx (if exists)
+  // New tokens from database
+  "XsP7xzNPvEHS1m6qfanPUGjNmdnmsLKEoNAnHjdxxyZ": 485.25, // MSTRx
+  "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh": 172.80, // NVDAx
+  "Xs7ZdzSHLU9ftNJsii5fCeJhoRWSC32SQGzGQtePxNu": 325.45, // COINx
+  "Xsa62P5mvPszXL1krVUnU5ar38bBSVcWAB6fmPCo5Zu": 704.20, // METAx
+  "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W": 566.96, // SPYx
+  "Xs8S1uUs1zvS2p7iwtsG3b6fkhpvmwz4GYU3gWAmWHZ": 512.75, // QQQx
+  "XsvNBAYkrDRNhA7wPHQfX3ZUXZyZLdnCQDfHZ56bzpg": 35.80,  // HOODx
+  "XsueG8BtpquVJX9LVLLEGuViXUungE6WmK5YZ3p3bd1": 28.45,  // CRCLx
+  "Xs2yquAgsHByNzx68WJC55WHjHBvG9JsMB7CWjTLyPy": 125.30, // DFDVx
+  "XsaQTCgebC2KPbf27KUhdv5JFvHhQ4GDAPURwrEhAzb": 15.75,  // AMBRx
+  "Xsv9hRk1z5ystj9MhnA7Lq4vjSsLwzL2nxrwmwtD3re": 245.60  // GLDx
 };
 
 export async function fetchXStocks(forceRefresh: boolean = false): Promise<XStock[]> {
-  console.log('🔄 Fetching xStocks from database...')
 
   try {
     const { data, error } = await supabase
@@ -24,12 +35,10 @@ export async function fetchXStocks(forceRefresh: boolean = false): Promise<XStoc
       .order('symbol')
 
     if (error) {
-      console.error('❌ Error fetching xStocks:', error)
       throw new Error(`Failed to fetch xStocks: ${error.message}`)
     }
 
     if (!data || data.length === 0) {
-      console.log('📊 No xStocks found in database')
       return []
     }
 
@@ -45,16 +54,13 @@ export async function fetchXStocks(forceRefresh: boolean = false): Promise<XStoc
       market_cap: record.market_cap || undefined,
     }))
 
-    console.log(`✅ Fetched ${xStocks.length} xStocks from database`)
     return xStocks
   } catch (error) {
-    console.error('❌ Error in fetchXStocks:', error)
     throw error
   }
 }
 
 export async function fetchPrices(stockAddresses: string[]): Promise<Record<string, number>> {
-  console.log('💰 Fetching live prices for', stockAddresses.length, 'stocks...')
   
   try {
     // Try to fetch live prices from Jupiter API
@@ -82,11 +88,9 @@ export async function fetchPrices(stockAddresses: string[]): Promise<Record<stri
       }
     }
 
-    console.log(`✅ Fetched live prices for ${Object.keys(livePrices).length} stocks from Jupiter API`)
     return livePrices
 
   } catch (error) {
-    console.warn('⚠️ Jupiter API failed, using fallback prices:', error)
     
     // Fallback to hardcoded prices
     const fallbackPrices: Record<string, number> = {}
@@ -96,7 +100,28 @@ export async function fetchPrices(stockAddresses: string[]): Promise<Record<stri
       }
     })
 
-    console.log(`✅ Using fallback prices for ${Object.keys(fallbackPrices).length} stocks`)
     return fallbackPrices
+  }
+}
+
+export async function updateXStockMarketData(
+  address: string, 
+  marketCap: number, 
+  dailyVolume: number
+): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('xstocks_metadata')
+      .update({
+        market_cap: marketCap,
+        daily_volume: dailyVolume,
+        updated_at: new Date().toISOString()
+      })
+      .eq('solana_address', address)
+
+    if (error) {
+    } else {
+    }
+  } catch (error) {
   }
 }

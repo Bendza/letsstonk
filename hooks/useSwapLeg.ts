@@ -1,7 +1,8 @@
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
-import { Transaction, VersionedTransaction } from "@solana/web3.js"
+import { Transaction, VersionedTransaction, Connection } from "@solana/web3.js"
 import { useMutation } from "@tanstack/react-query"
 import type { SwapQuote } from "../lib/types"
+import { getTradingRpcUrl } from "@/lib/rpc-config"
 
 interface SwapParams {
   inputMint: string
@@ -16,6 +17,8 @@ interface SwapResult {
 }
 
 export function useSwapLeg() {
+  // Use a dedicated RPC connection for trading to avoid rate limits
+  const tradingConnection = new Connection(getTradingRpcUrl(), 'confirmed');
   const { connection } = useConnection()
   const { publicKey, signTransaction, signAllTransactions } = useWallet()
 
@@ -23,7 +26,7 @@ export function useSwapLeg() {
     const { inputMint, outputMint, amount, slippageBps = 50 } = params
 
     // Use public API endpoint without API key for quotes
-    const quoteUrl = new URL("https://lite-api.jup.ag/v6/quote")
+    const quoteUrl = new URL("https://lite-api.jup.ag/swap/v1/quote")
     quoteUrl.searchParams.set("inputMint", inputMint)
     quoteUrl.searchParams.set("outputMint", outputMint)
     quoteUrl.searchParams.set("amount", amount.toString())
@@ -51,7 +54,7 @@ export function useSwapLeg() {
     }
 
     // Get swap transaction using public API
-    const swapResponse = await fetch("https://lite-api.jup.ag/v6/swap", {
+    const swapResponse = await fetch("https://lite-api.jup.ag/swap/v1/swap", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -81,33 +84,31 @@ export function useSwapLeg() {
       const transaction = VersionedTransaction.deserialize(transactionBuf)
 
       const signedTransaction = await signTransaction(transaction as any)
-      const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
+      const signature = await tradingConnection.sendRawTransaction(signedTransaction.serialize(), {
         skipPreflight: false,
         preflightCommitment: "confirmed",
         maxRetries: 3,
       })
 
       // Confirm transaction
-      await connection.confirmTransaction(signature, "confirmed")
+      await tradingConnection.confirmTransaction(signature, "confirmed")
       return signature
     } catch (versionedError) {
-      console.warn("VersionedTransaction failed, trying legacy:", versionedError)
 
       // Fallback to legacy transaction
       try {
         const transaction = Transaction.from(Buffer.from(swapTransaction, "base64"))
         const signedTransaction = await signTransaction(transaction)
 
-        const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
+        const signature = await tradingConnection.sendRawTransaction(signedTransaction.serialize(), {
           skipPreflight: false,
           preflightCommitment: "confirmed",
           maxRetries: 3,
         })
 
-        await connection.confirmTransaction(signature, "confirmed")
+        await tradingConnection.confirmTransaction(signature, "confirmed")
         return signature
       } catch (legacyError) {
-        console.error("Both versioned and legacy transactions failed:", legacyError)
         throw new Error("Transaction signing failed")
       }
     }
@@ -120,7 +121,6 @@ export function useSwapLeg() {
       return { signature, quote }
     },
     onError: (error) => {
-      console.error("Swap failed:", error)
     },
   })
 

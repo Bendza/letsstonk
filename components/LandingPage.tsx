@@ -56,7 +56,6 @@ export function LandingPage({ onGetStarted, onNavigate }: LandingPageProps) {
         setFeaturedXStocks(stocksWithPrices)
         setPricesLoading(false)
       } catch (error) {
-        console.error('Failed to load xStocks:', error)
         setPricesLoading(false)
       }
     }
@@ -66,15 +65,9 @@ export function LandingPage({ onGetStarted, onNavigate }: LandingPageProps) {
   // Auto-navigate when user gets authenticated and has profile
   useEffect(() => {
     if (isAuthenticated && hasProfile && hasPortfolio) {
-      console.log('🚀 User authenticated with portfolio, checking onboarding status...', { 
-        user: user?.id,
-        hasProfile,
-        hasPortfolio
-      })
       
       // Wait a bit then navigate to markets
       setTimeout(() => {
-        console.log('✅ User has completed onboarding, going to markets')
         onNavigate("dashboard")
       }, 1500)
     }
@@ -91,7 +84,6 @@ export function LandingPage({ onGetStarted, onNavigate }: LandingPageProps) {
       }
     } else if (connected) {
       // Wallet is connected but not authenticated, trigger authentication
-      console.log('🔐 Wallet connected, triggering authentication...')
       await manualAuth()
     } else {
       // User needs to connect wallet first, show disclaimer
@@ -603,7 +595,7 @@ export function LandingPage({ onGetStarted, onNavigate }: LandingPageProps) {
               </div>
               <div className="text-center mt-6">
                 <Badge className="bg-gray-200 text-gray-900 rounded-none">
-                  {featuredXStocks.length > 0 ? `${featuredXStocks.length}+ STOCKS AVAILABLE` : 'LOADING STOCKS...'}
+                  {featuredXStocks.length > 0 ? `15+ STOCKS AVAILABLE` : 'LOADING STOCKS...'}
                 </Badge>
               </div>
             </div>

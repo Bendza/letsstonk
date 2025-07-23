@@ -52,7 +52,6 @@ export function usePortfolio(walletAddress: string | null): UsePortfolioReturn {
         setPortfolio(data as Portfolio)
       }
     } catch (err) {
-      console.error('Error fetching portfolio:', err)
       setError(err instanceof Error ? err.message : 'Failed to fetch portfolio')
     } finally {
       setLoading(false)
@@ -75,7 +74,6 @@ export function usePortfolio(walletAddress: string | null): UsePortfolioReturn {
       // Refetch portfolio data after sync
       await fetchPortfolio()
     } catch (err) {
-      console.error('Error syncing portfolio:', err)
       setError(err instanceof Error ? err.message : 'Failed to sync portfolio')
     }
   }

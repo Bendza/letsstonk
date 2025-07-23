@@ -29,14 +29,11 @@ export function useWalletAuth() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          console.log('✅ Found existing session:', session.user.id);
           await updateUserState(session.user);
         } else {
-          console.log('❌ No existing session found');
           setState(prev => ({ ...prev, loading: false }));
         }
       } catch (error) {
-        console.error('❌ Error checking session:', error);
         setState(prev => ({ ...prev, loading: false }));
       }
     };
@@ -46,13 +43,10 @@ export function useWalletAuth() {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('🔔 Auth state change:', event);
         
         if (event === 'SIGNED_IN' && session?.user) {
-          console.log('✅ User signed in:', session.user.id);
           await updateUserState(session.user);
         } else if (event === 'SIGNED_OUT') {
-          console.log('👋 User signed out');
           setState({
             user: null,
             isAuthenticated: false,
@@ -93,13 +87,7 @@ export function useWalletAuth() {
         hasPortfolio: !!portfolio && !portfolioError,
       });
 
-      console.log('✅ User state updated:', {
-        userId: user.id,
-        hasProfile: !!profile && !profileError,
-        hasPortfolio: !!portfolio && !portfolioError,
-      });
     } catch (error) {
-      console.error('❌ Error updating user state:', error);
       setState(prev => ({
         ...prev,
         user,
@@ -112,19 +100,16 @@ export function useWalletAuth() {
 
   const authenticateWithWeb3 = async () => {
     if (!connected || !publicKey) {
-      console.log('❌ Wallet not connected');
       return;
     }
 
     if (state.authInProgress) {
-      console.log('⏳ Authentication already in progress');
       return;
     }
 
     setState(prev => ({ ...prev, authInProgress: true }));
 
     try {
-      console.log('🔐 Starting Web3 authentication...');
       
       const { data, error } = await supabase.auth.signInWithWeb3({
         chain: 'solana',
@@ -132,34 +117,28 @@ export function useWalletAuth() {
       });
 
       if (error) {
-        console.error('❌ Web3 authentication error:', error);
         setState(prev => ({ ...prev, authInProgress: false }));
         return;
       }
 
       if (data.user) {
-        console.log('✅ Web3 authentication successful:', data.user.id);
         // updateUserState will be called by the auth state change listener
       }
     } catch (error) {
-      console.error('❌ Web3 authentication failed:', error);
       setState(prev => ({ ...prev, authInProgress: false }));
     }
   };
 
   const manualAuth = async () => {
     if (state.isAuthenticated) {
-      console.log('✅ Already authenticated');
       return;
     }
     
-    console.log('🔐 Manual authentication triggered');
     await authenticateWithWeb3();
   };
 
   const signOut = async () => {
     try {
-      console.log('🚪 Signing out...');
       await supabase.auth.signOut();
       
       // Also disconnect the wallet
@@ -167,9 +146,7 @@ export function useWalletAuth() {
         await disconnect();
       }
       
-      console.log('✅ Signed out successfully');
     } catch (error) {
-      console.error('❌ Error signing out:', error);
     }
   };
 
@@ -181,7 +158,6 @@ export function useWalletAuth() {
     const walletAddress = publicKey.toBase58();
 
     try {
-      console.log('📝 Creating/updating user profile...', { riskLevel, initialInvestment, walletAddress });
 
       // Upsert user profile (update if exists, create if not)
       const { error: userError } = await supabase
@@ -196,7 +172,6 @@ export function useWalletAuth() {
         });
 
       if (userError) {
-        console.error('❌ Error upserting user profile:', userError);
         throw userError;
       }
 
@@ -209,7 +184,6 @@ export function useWalletAuth() {
         .single();
 
       if (checkError && checkError.code !== 'PGRST116') {
-        console.error('❌ Error checking existing portfolio:', checkError);
         throw checkError;
       }
 
@@ -226,12 +200,9 @@ export function useWalletAuth() {
           });
 
         if (portfolioError) {
-          console.error('❌ Error creating portfolio:', portfolioError);
           throw portfolioError;
         }
-        console.log('✅ New portfolio created successfully');
       } else {
-        console.log('✅ Portfolio already exists, skipping creation');
       }
 
       // Update state
@@ -241,10 +212,8 @@ export function useWalletAuth() {
         hasPortfolio: true,
       }));
 
-      console.log('✅ User profile and portfolio setup completed successfully');
       return { success: true };
     } catch (error) {
-      console.error('❌ Error setting up user profile:', error);
       throw error;
     }
   };

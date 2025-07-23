@@ -1,44 +1,50 @@
 "use client"
 
-import React, { useMemo } from 'react'
-import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react'
-import { WalletAdapterNetwork } from '@solana/wallet-adapter-base'
-import { WalletModalProvider } from '@solana/wallet-adapter-react-ui'
+import { FC, ReactNode, useMemo } from "react"
+import {
+  ConnectionProvider,
+  WalletProvider,
+} from "@solana/wallet-adapter-react"
+import { WalletModalProvider } from "@solana/wallet-adapter-react-ui"
+import "@solana/wallet-adapter-react-ui/styles.css"
+import { clusterApiUrl } from "@solana/web3.js"
+import { getTradingRpcUrl } from "@/lib/rpc-config"
 import {
   PhantomWalletAdapter,
   SolflareWalletAdapter,
   TorusWalletAdapter,
-} from '@solana/wallet-adapter-wallets'
+  MathWalletAdapter,
+  CoinbaseWalletAdapter,
+} from "@solana/wallet-adapter-wallets"
+import { WalletAdapterNetwork } from "@solana/wallet-adapter-base"
 
-// Import wallet adapter CSS
-require('@solana/wallet-adapter-react-ui/styles.css')
-
-interface Props {
-  children: React.ReactNode
+interface WalletContextProviderProps {
+  children: ReactNode
 }
 
-export function SolanaWalletProvider({ children }: Props) {
-  // Use devnet for development, can switch to mainnet-beta for production
-  const network = WalletAdapterNetwork.Devnet
+const WalletContextProvider: FC<WalletContextProviderProps> = ({ children }) => {
+  const network = WalletAdapterNetwork.Mainnet
   
-  // Use more reliable RPC endpoints to avoid 403 errors
+  // Use our RPC configuration to avoid rate limiting
   const endpoint = useMemo(() => {
-    if (network === WalletAdapterNetwork.Devnet) {
-      return 'https://api.devnet.solana.com'
+    // Try to use custom RPC first, fallback to default if not set
+    const customRpc = getTradingRpcUrl()
+    if (customRpc && customRpc !== 'https://api.mainnet-beta.solana.com') {
+      return customRpc
     }
-    // For mainnet, use Helius free tier or other reliable RPC
-    // These are more reliable than the public api.mainnet-beta.solana.com
-    return process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://mainnet.helius-rpc.com/?api-key=demo'
+    
+    return clusterApiUrl(network)
   }, [network])
 
-  // Wallet adapters supported
   const wallets = useMemo(
     () => [
       new PhantomWalletAdapter(),
       new SolflareWalletAdapter(),
       new TorusWalletAdapter(),
+      new MathWalletAdapter(),
+      new CoinbaseWalletAdapter(),
     ],
-    [network]
+    []
   )
 
   return (
@@ -50,4 +56,6 @@ export function SolanaWalletProvider({ children }: Props) {
       </WalletProvider>
     </ConnectionProvider>
   )
-} 
+}
+
+export default WalletContextProvider 

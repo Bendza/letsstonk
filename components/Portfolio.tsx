@@ -832,7 +832,6 @@ export function Portfolio({ onboardingData, onNavigate, onLogout }: PortfolioPro
             userRiskTolerance={onboardingData.riskTolerance}
             onRiskToleranceChange={(newTolerance) => {
               // Update onboarding data if needed
-              console.log('Risk tolerance updated to:', newTolerance)
             }}
           />
         </TabsContent>

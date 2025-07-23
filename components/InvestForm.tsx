@@ -92,12 +92,10 @@ export function InvestForm() {
       // Execute batch swap
       const results = await batchSwapMutation.mutateAsync(swapParams)
 
-      console.log("Investment successful:", results)
 
       // TODO: Store investment record in Supabase
       // TODO: Redirect to portfolio dashboard
     } catch (error) {
-      console.error("Investment failed:", error)
     } finally {
       setIsInvesting(false)
     }

@@ -18,14 +18,12 @@ export async function getPriceHistory(
     // - Birdeye API for Solana token history
     // - DexScreener API for DEX price history
     
-    console.log(`Fetching price history for ${symbol} (${tokenAddress})`)
     
     // Generate mock historical data based on current price patterns
     const mockData = await generateRealisticPriceHistory(symbol, timeframe)
     
     return mockData
   } catch (error) {
-    console.error('Failed to fetch price history:', error)
     return generateFallbackPriceHistory()
   }
 }
