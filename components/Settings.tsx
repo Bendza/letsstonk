@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { useMockWallet } from "./MockWalletProvider"
+import { useWallet } from '@solana/wallet-adapter-react'
 import { Shield, Bell, Wallet, RefreshCw, AlertTriangle, CheckCircle, Download, Trash2 } from "lucide-react"
 
 interface SettingsProps {
@@ -20,7 +20,7 @@ interface SettingsProps {
 }
 
 export function Settings({ onNavigate, onLogout }: SettingsProps) {
-  const { connected, publicKey } = useMockWallet()
+  const { connected, publicKey } = useWallet()
 
   // Portfolio Settings
   const [autoRebalance, setAutoRebalance] = useState(true)
