@@ -467,33 +467,38 @@ export function Portfolio({ onboardingData, onNavigate, onLogout }: PortfolioPro
         <TabsList className="grid w-full grid-cols-5 bg-white border border-gray-200 rounded-none">
           <TabsTrigger
             value="overview"
-            className="data-[state=active]:bg-gray-900 data-[state=active]:text-white rounded-none"
+            className="data-[state=active]:bg-gray-900 data-[state=active]:text-white rounded-none flex items-center gap-2"
           >
-            OVERVIEW
+            <PieChart className="h-4 w-4" />
+            <span className="hidden sm:inline">OVERVIEW</span>
           </TabsTrigger>
           <TabsTrigger
             value="holdings"
-            className="data-[state=active]:bg-gray-900 data-[state=active]:text-white rounded-none"
+            className="data-[state=active]:bg-gray-900 data-[state=active]:text-white rounded-none flex items-center gap-2"
           >
-            HOLDINGS
+            <BarChart3 className="h-4 w-4" />
+            <span className="hidden sm:inline">HOLDINGS</span>
           </TabsTrigger>
           <TabsTrigger
             value="performance"
-            className="data-[state=active]:bg-gray-900 data-[state=active]:text-white rounded-none"
+            className="data-[state=active]:bg-gray-900 data-[state=active]:text-white rounded-none flex items-center gap-2"
           >
-            PERFORMANCE
+            <TrendingUp className="h-4 w-4" />
+            <span className="hidden sm:inline">PERFORMANCE</span>
           </TabsTrigger>
           <TabsTrigger
             value="analytics"
-            className="data-[state=active]:bg-gray-900 data-[state=active]:text-white rounded-none"
+            className="data-[state=active]:bg-gray-900 data-[state=active]:text-white rounded-none flex items-center gap-2"
           >
-            ANALYTICS
+            <Activity className="h-4 w-4" />
+            <span className="hidden sm:inline">ANALYTICS</span>
           </TabsTrigger>
           <TabsTrigger
             value="risk"
-            className="data-[state=active]:bg-gray-900 data-[state=active]:text-white rounded-none"
+            className="data-[state=active]:bg-gray-900 data-[state=active]:text-white rounded-none flex items-center gap-2"
           >
-            RISK
+            <AlertCircle className="h-4 w-4" />
+            <span className="hidden sm:inline">RISK</span>
           </TabsTrigger>
         </TabsList>
 
