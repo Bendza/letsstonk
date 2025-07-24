@@ -5,12 +5,17 @@ export interface Transaction {
   id: string
   created_at: string
   portfolio_id: string | null
-  transaction_type: 'buy' | 'sell'
+  wallet_address?: string | null
+  transaction_type: 'buy' | 'sell' | 'rebalance'
   input_token: string
   output_token: string
   input_amount: number
   output_amount: number
+  price_impact?: number | null
+  slippage?: number | null
+  fees?: number | null
   status: 'pending' | 'confirmed' | 'failed'
+  block_time?: string | null
   transaction_signature: string
 }
 
