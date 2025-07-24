@@ -51,8 +51,8 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: '/favicon.ico',
-    shortcut: '/favicon-16x16.png',
+    icon: '/logo-solstock.webp',
+    shortcut: '/logo-solstock.webp',
     apple: '/apple-touch-icon.png',
   },
 }

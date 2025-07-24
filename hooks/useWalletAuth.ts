@@ -139,14 +139,45 @@ export function useWalletAuth() {
 
   const signOut = async () => {
     try {
-      await supabase.auth.signOut();
       
-      // Also disconnect the wallet
+      // First disconnect the wallet
       if (connected) {
         await disconnect();
       }
       
+      // Then sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Supabase signOut error:', error);
+        throw error;
+      }
+      
+      // Force update the state to logged out
+      setState({
+        user: null,
+        isAuthenticated: false,
+        loading: false,
+        authInProgress: false,
+        hasProfile: false,
+        hasPortfolio: false,
+      });
+      
+      
     } catch (error) {
+      console.error('Logout error:', error);
+      
+      // Even if there's an error, force the local state to logged out
+      setState({
+        user: null,
+        isAuthenticated: false,
+        loading: false,
+        authInProgress: false,
+        hasProfile: false,
+        hasPortfolio: false,
+      });
+      
+      throw error;
     }
   };
 

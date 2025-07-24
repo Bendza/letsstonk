@@ -56,7 +56,6 @@ export function useMockSwap() {
 
     // Mock transaction signature
     const signature = `mock_tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    console.log("Mock swap executed:", { quote, signature })
 
     return signature
   }

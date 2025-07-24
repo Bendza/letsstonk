@@ -3,16 +3,14 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { LandingPage } from "../components/LandingPage"
-import { OnboardingFlow, type OnboardingData } from "../components/OnboardingFlow"
 import { TradingModal } from "../components/TradingModal"
 import { DisclaimerModal } from "@/components/DisclaimerModal"
 import { useWalletAuth } from "@/hooks/useWalletAuth"
 
 export default function Page() {
-  const [showOnboarding, setShowOnboarding] = useState(false)
   const [selectedStock, setSelectedStock] = useState<any>(null)
   const [showTradingModal, setShowTradingModal] = useState(false)
-  const [showDisclaimer, setShowDisclaimer] = useState(true)
+  const [showDisclaimer, setShowDisclaimer] = useState(false)
   const router = useRouter()
   
   const { isAuthenticated, hasProfile, hasPortfolio, user } = useWalletAuth()
@@ -26,16 +24,10 @@ export default function Page() {
   }, [isAuthenticated, hasProfile, hasPortfolio, router])
 
   const handleGetStarted = () => {
-    setShowOnboarding(true)
-  }
-
-  const handleOnboardingComplete = (data: OnboardingData) => {
+    // Navigate directly to markets instead of showing onboarding
     router.push('/dashboard/markets')
   }
 
-  const handleBackToLanding = () => {
-    setShowOnboarding(false)
-  }
 
   const handleTradeStock = (stock: any) => {
     setSelectedStock(stock)
@@ -63,14 +55,6 @@ export default function Page() {
     setShowDisclaimer(false)
   }
 
-  if (showOnboarding) {
-    return (
-      <OnboardingFlow 
-        onComplete={handleOnboardingComplete}
-        onBack={handleBackToLanding}
-      />
-    )
-  }
 
   return (
     <div>
@@ -80,7 +64,6 @@ export default function Page() {
         onAccept={handleAcceptDisclaimer}
       />
       <LandingPage 
-        onGetStarted={handleGetStarted} 
         onNavigate={handleNavigate}
       />
       

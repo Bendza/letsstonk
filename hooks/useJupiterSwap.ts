@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Connection, PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { createJupiterApiClient } from '@jup-ag/api';
+import { getTradingRpcUrl } from '@/lib/rpc-config';
 
 // Real xStocks token mint addresses from Backed Finance
 const XSTOCK_MINTS = {
@@ -49,7 +50,8 @@ export function useJupiterSwap() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const connection = new Connection(process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://mainnet.helius-rpc.com/?api-key=demo');
+  // Use the proper RPC configuration for trading
+  const connection = new Connection(getTradingRpcUrl(), 'confirmed');
   const jupiterApi = createJupiterApiClient();
 
   // Get quote for a single token swap
@@ -217,11 +219,7 @@ export function useJupiterSwap() {
         signature: 'mock-tx-' + Math.random().toString(36).substr(2, 9),
       }));
 
-      console.log('🎉 Mock portfolio created successfully:', {
-        allocations: validAllocations,
-        totalInvestment: validAllocations.reduce((sum, a) => sum + a.usdcAmount, 0),
-        results
-      });
+
 
       return { success: true, results };
     } catch (error) {
@@ -238,7 +236,6 @@ export function useJupiterSwap() {
     portfolioAllocation: PortfolioAllocation[]
   ): Promise<{ success: boolean; results: SwapResult[]; error?: string }> => {
     // For now, use mock portfolio creation since xStocks might not be available
-    console.log('🔄 Using mock portfolio creation for testing...');
     return createMockPortfolio(portfolioAllocation);
     
     // Uncomment below for real Jupiter integration when tokens are available
@@ -349,7 +346,6 @@ export function useJupiterSwap() {
         }
       }
       
-      console.log('🔍 xStock Availability Test Results:', testResults);
       return testResults;
     } catch (err) {
       console.error('❌ Error testing xStock availability:', err);

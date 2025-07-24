@@ -14,6 +14,8 @@ import { useWalletAuth } from "@/hooks/useWalletAuth"
 import { usePortfolio } from "@/hooks/usePortfolio"
 import { useWallet } from '@solana/wallet-adapter-react'
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
+import { Connection } from '@solana/web3.js'
+import { getTradingRpcUrl } from "@/lib/rpc-config"
 
 interface TradingModalProps {
   stock: {
@@ -39,6 +41,7 @@ interface TransactionStep {
 
 export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
   const [side, setSide] = useState<"buy" | "sell">("buy")
+  const payWith: 'SOL' = 'SOL'
   const [amount, setAmount] = useState("")
   const [loading, setLoading] = useState(false)
   const [showTransactionFlow, setShowTransactionFlow] = useState(false)
@@ -46,11 +49,13 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
   const [transactionError, setTransactionError] = useState<string | null>(null)
   const [quote, setQuote] = useState<any>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
+  const [solBalance, setSolBalance] = useState<number | null>(null)
   
   const { 
     getQuote, 
     buyXStock, 
     sellXStock, 
+    checkSolBalance,
     loading: jupiterLoading, 
     error: jupiterError,
     connected 
@@ -59,6 +64,28 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
   const { user } = useWalletAuth()
   const { publicKey } = useWallet()
   const { portfolio, syncPortfolio } = usePortfolio(publicKey?.toString() || null)
+
+  // Fetch SOL balance once when modal opens or after a trade completes
+  useEffect(() => {
+    if (!open) return
+
+    const getBalance = async () => {
+      if (!connected || !publicKey) {
+        setSolBalance(null)
+        return
+      }
+      try {
+        const connection = new Connection(getTradingRpcUrl(), 'confirmed')
+        const lamports = await connection.getBalance(publicKey)
+        setSolBalance(lamports / 1e9)
+      } catch (err) {
+        console.warn('Balance fetch failed', err)
+        setSolBalance(null)
+      }
+    }
+
+    getBalance()
+  }, [open, connected, publicKey])
 
   // Get quote when amount changes
   useEffect(() => {
@@ -137,7 +164,7 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
       let signature: string | null = null
       
       if (side === 'buy') {
-        signature = await buyXStock(stock.symbol, tradeAmount, portfolioId)
+        signature = await buyXStock(stock.symbol, tradeAmount, portfolioId, 'SOL')
       } else {
         signature = await sellXStock(stock.symbol, tradeAmount, portfolioId)
       }
@@ -351,6 +378,27 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
 
           {connected && (
             <>
+              {/* SOL Balance Check */}
+              {solBalance !== null && (
+                <Card>
+                  <CardContent className="pt-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">SOL Balance</span>
+                      <div className="text-right">
+                        <div className={`font-semibold ${solBalance < 0.01 ? 'text-red-600' : 'text-green-600'}`}>
+                          {solBalance.toFixed(4)} SOL
+                        </div>
+                        {solBalance < 0.01 && (
+                          <div className="text-xs text-red-600">
+                            ⚠️ Low balance - need 0.01+ SOL for fees
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Current Price */}
               <Card>
                 <CardContent className="pt-4">
@@ -372,8 +420,9 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
               {/* Info Banner */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                 <div className="text-sm text-blue-800">
-                  <strong>Real Trading:</strong> This uses Jupiter's swap aggregator for actual on-chain trading. 
-                  Transactions are executed on Solana mainnet.
+                  <strong>Real Trading:</strong> Uses Jupiter's swap aggregator for on-chain trading on Solana mainnet.
+                  <br />
+                  <strong>Slippage:</strong> Set to 3% for better execution. Transactions require SOL for fees.
                 </div>
               </div>
 
@@ -393,22 +442,22 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                   <div className="space-y-2">
                     <Label htmlFor="amount">
                       {side === 'buy' 
-                        ? `Amount to spend (USDC)` 
+                        ? `Amount to spend (SOL)` 
                         : `Quantity to sell (${stock.symbol})`
                       }
                     </Label>
                     <Input
                       id="amount"
                       type="number"
-                      placeholder={side === 'buy' ? "100.00" : "0.30"}
+                      placeholder={side === 'buy' ? "0.1" : "0.30"}
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       min="0"
-                      step={side === 'buy' ? "1" : "0.000001"}
+                      step={side === 'buy' ? "0.000001" : "0.000001"}
                     />
                     <div className="text-xs text-gray-500">
                       {side === 'buy' 
-                        ? `Enter how much USDC you want to spend (e.g., $100 worth)`
+                        ? `Enter how much SOL you want to spend (e.g., 0.1 SOL)`
                         : `Enter how many ${stock.symbol} tokens you want to sell`
                       }
                     </div>
@@ -430,7 +479,7 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                           <>
                             <div className="flex justify-between">
                               <span>Input:</span>
-                              <span>{formatNumber(quote.inAmount, 6)} {side === 'buy' ? 'USDC' : stock.symbol}</span>
+                              <span>{formatNumber(quote.inAmount, 6)} SOL</span>
                             </div>
                             <div className="flex justify-between">
                               <span>Output:</span>
@@ -460,8 +509,8 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                         {side === 'buy' ? (
                           <>
                             <div className="flex justify-between">
-                              <span>USDC to spend:</span>
-                              <span>${parseFloat(amount).toFixed(2)}</span>
+                              <span>SOL to spend:</span>
+                              <span>{parseFloat(amount).toFixed(4)} SOL</span>
                             </div>
                             <div className="flex justify-between">
                               <span>Stock price:</span>
@@ -498,7 +547,7 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                   {/* Trade Button */}
                   <Button
                     onClick={handleTrade}
-                    disabled={loading || !amount || parseFloat(amount) <= 0 || !connected || jupiterLoading}
+                    disabled={loading || !amount || parseFloat(amount) <= 0 || !connected || jupiterLoading || (solBalance !== null && solBalance < 0.01) || (solBalance!==null && parseFloat(amount) >= solBalance)}
                     className={`w-full ${
                       side === "buy" 
                         ? "bg-green-600 hover:bg-green-700" 
@@ -509,6 +558,11 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                         Processing...
+                      </div>
+                    ) : solBalance !== null && solBalance < 0.01 ? (
+                      <div className="flex items-center gap-2">
+                        <Wallet className="w-4 h-4" />
+                        Need more SOL for fees
                       </div>
                     ) : (
                       <>

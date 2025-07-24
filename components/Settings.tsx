@@ -52,17 +52,14 @@ export function Settings({ onNavigate, onLogout }: SettingsProps) {
 
   const handleSaveSettings = () => {
     // Mock save functionality
-    console.log("Settings saved")
   }
 
   const handleExportData = () => {
     // Mock export functionality
-    console.log("Exporting user data")
   }
 
   const handleDeleteAccount = () => {
     // Mock delete functionality
-    console.log("Account deletion requested")
   }
 
   return (

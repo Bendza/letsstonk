@@ -163,7 +163,6 @@ async function rebalancePortfolio(portfolio: Portfolio, connection: Connection, 
   // 3. Handle transaction signing (requires stored keypair or user approval)
   // 4. Update portfolio records
 
-  console.log(`Rebalancing portfolio ${portfolio.id}`)
 
   // For now, just update the last_rebalanced timestamp
   const { error } = await supabase

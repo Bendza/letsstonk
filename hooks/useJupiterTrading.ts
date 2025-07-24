@@ -37,12 +37,33 @@ export const useJupiterTrading = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Check SOL balance for transaction fees
+  const checkSolBalance = useCallback(async (): Promise<boolean> => {
+    if (!publicKey) return false;
+    
+    try {
+      const balance = await tradingConnection.getBalance(publicKey);
+      const solBalance = balance / LAMPORTS_PER_SOL;
+      
+      // Need at least 0.01 SOL for transaction fees
+      if (solBalance < 0.01) {
+        setError(`Insufficient SOL balance: ${solBalance.toFixed(4)} SOL. Need at least 0.01 SOL for transaction fees.`);
+        return false;
+      }
+      
+      return true;
+    } catch (err) {
+      setError('Failed to check SOL balance');
+      return false;
+    }
+  }, [publicKey, tradingConnection]);
+
   // Get quote from Jupiter
   const getQuote = useCallback(async ({
     inputMint,
     outputMint,
     amount,
-    slippageBps = 50
+    slippageBps = 300 // Increased to 3% for better success rate
   }: JupiterSwapParams): Promise<QuoteResponse | null> => {
     try {
       const response = await fetch(
@@ -56,10 +77,19 @@ export const useJupiterTrading = () => {
       );
       
       if (!response.ok) {
-        throw new Error('Failed to get quote');
+        const errorText = await response.text();
+        throw new Error(`Failed to get quote: ${response.status} ${errorText}`);
       }
       
-      return await response.json();
+      const quote = await response.json();
+      
+      // Check if price impact is too high (> 10%)
+      const priceImpact = parseFloat(quote.priceImpactPct || '0');
+      if (priceImpact > 10) {
+        throw new Error(`Price impact too high: ${priceImpact.toFixed(2)}%. Consider reducing trade size.`);
+      }
+      
+      return quote;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to get quote');
       return null;
@@ -76,12 +106,18 @@ export const useJupiterTrading = () => {
       return null;
     }
 
+    // Check SOL balance first
+    const hasSufficientSol = await checkSolBalance();
+    if (!hasSufficientSol) {
+      return null;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-          // Get swap transaction from Jupiter (using free endpoint)
-    const swapResponse = await fetch('https://lite-api.jup.ag/swap/v1/swap', {
+      // Get swap transaction from Jupiter with better configuration
+      const swapResponse = await fetch('https://lite-api.jup.ag/swap/v1/swap', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -90,61 +126,127 @@ export const useJupiterTrading = () => {
           quoteResponse,
           userPublicKey: publicKey.toString(),
           wrapAndUnwrapSol: true,
+          useSharedAccounts: true, // Better for ATA handling
           dynamicComputeUnitLimit: true,
+          dynamicSlippage: { // Allow dynamic slippage adjustment
+            maxBps: 1000 // Max 10% slippage as fallback
+          },
           prioritizationFeeLamports: {
             priorityLevelWithMaxLamports: {
-              maxLamports: 10000000,
-              priorityLevel: "high"
+              maxLamports: 1000000, // Reduced from 10M to 1M lamports
+              priorityLevel: "medium" // Changed from "high" to "medium"
             }
           }
         })
       });
 
       if (!swapResponse.ok) {
-        throw new Error('Failed to get swap transaction');
+        const errorText = await swapResponse.text();
+        throw new Error(`Failed to get swap transaction: ${swapResponse.status} ${errorText}`);
       }
 
       const { swapTransaction } = await swapResponse.json();
+
+      if (!swapTransaction) {
+        throw new Error('No swap transaction received from Jupiter');
+      }
 
       // Deserialize the transaction
       const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
       const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
 
-      // Send transaction through wallet using trading connection
+      // Send transaction through wallet using trading connection with better settings
       const signature = await sendTransaction(transaction, tradingConnection, {
-        skipPreflight: false,
-        maxRetries: 3
+        skipPreflight: true, // Skip preflight to avoid simulation issues
+        maxRetries: 5, // Increased retries
+        preflightCommitment: 'processed' // Faster confirmation
       });
 
-      // Confirm transaction using trading connection
+      console.log('Transaction sent:', signature);
+
+      // Confirm transaction using trading connection with timeout
       const latestBlockHash = await tradingConnection.getLatestBlockhash();
-      await tradingConnection.confirmTransaction({
-        blockhash: latestBlockHash.blockhash,
-        lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
-        signature
-      });
+      
+      try {
+        await tradingConnection.confirmTransaction({
+          blockhash: latestBlockHash.blockhash,
+          lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
+          signature
+        }, 'confirmed');
+        
+        console.log('Transaction confirmed:', signature);
+        
+        // Log transaction to Supabase
+        if (portfolioId) {
+          await logTransaction({
+            portfolioId,
+            signature,
+            inputMint: quoteResponse.inputMint,
+            outputMint: quoteResponse.outputMint,
+            inputAmount: quoteResponse.inAmount,
+            outputAmount: quoteResponse.outAmount,
+            type: 'buy'
+          });
+        }
 
-      // Log transaction to Supabase
-      if (portfolioId) {
-        await logTransaction({
-          portfolioId,
-          signature,
-          inputMint: quoteResponse.inputMint,
-          outputMint: quoteResponse.outputMint,
-          inputAmount: quoteResponse.inAmount,
-          outputAmount: quoteResponse.outAmount,
-          type: 'buy'
-        });
+        return signature;
+      } catch (confirmError) {
+        // Transaction might still succeed even if confirmation fails
+        console.warn('Confirmation failed, but transaction may still succeed:', confirmError);
+        
+        // Check transaction status manually
+        setTimeout(async () => {
+          try {
+            const status = await tradingConnection.getTransaction(signature, {
+              commitment: 'confirmed',
+              maxSupportedTransactionVersion: 0
+            });
+            
+            if (status?.meta?.err) {
+              console.error('Transaction failed:', status.meta.err);
+            } else if (status) {
+              console.log('Transaction succeeded after manual check');
+              // Log successful transaction
+              if (portfolioId) {
+                await logTransaction({
+                  portfolioId,
+                  signature,
+                  inputMint: quoteResponse.inputMint,
+                  outputMint: quoteResponse.outputMint,
+                  inputAmount: quoteResponse.inAmount,
+                  outputAmount: quoteResponse.outAmount,
+                  type: 'buy'
+                });
+              }
+            }
+          } catch (statusError) {
+            console.error('Failed to check transaction status:', statusError);
+          }
+        }, 5000); // Check after 5 seconds
+        
+        return signature; // Return signature anyway, let user check manually
       }
-
-      return signature;
+      
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Swap failed');
+      const errorMessage = err instanceof Error ? err.message : 'Swap failed';
+      console.error('Swap execution error:', err);
+      
+      // Provide more helpful error messages
+      if (errorMessage.includes('0x1')) {
+        setError('Insufficient funds in your wallet');
+      } else if (errorMessage.includes('0x0')) {
+        setError('Transaction succeeded but confirmation is pending. Check your wallet.');
+      } else if (errorMessage.includes('Instruction #4 Failed')) {
+        setError('Transaction failed during execution. This might be due to:\n• Insufficient SOL for fees\n• Token account issues\n• High slippage\n• Network congestion\n\nTry with a smaller amount or higher slippage tolerance.');
+      } else {
+        setError(errorMessage);
+      }
+      
       return null;
     } finally {
       setLoading(false);
     }
-  }, [connected, publicKey, sendTransaction, connection]);
+  }, [connected, publicKey, sendTransaction, tradingConnection, checkSolBalance]);
 
   // Log transaction to Supabase
   const logTransaction = useCallback(async (params: {
@@ -161,6 +263,7 @@ export const useJupiterTrading = () => {
         .from('transactions')
         .insert({
           portfolio_id: params.portfolioId,
+          wallet_address: publicKey?.toString() || null,
           transaction_signature: params.signature,
           transaction_type: params.type,
           input_token: params.inputMint,
@@ -171,16 +274,19 @@ export const useJupiterTrading = () => {
         });
 
       if (error) {
+        console.error('Failed to log transaction:', error);
       }
     } catch (err) {
+      console.error('Error logging transaction:', err);
     }
-  }, []);
+  }, [publicKey]);
 
-  // Buy xStock with USDC
+  // Buy xStock with USDC or SOL
   const buyXStock = useCallback(async (
     stockSymbol: string,
-    usdcAmount: number,
-    portfolioId?: string
+    amountIn: number, // amount expressed in chosen currency (USDC or SOL)
+    portfolioId?: string,
+    payWith: 'USDC' | 'SOL' = 'USDC'
   ) => {
     try {
       // Get stock metadata from Supabase
@@ -195,13 +301,18 @@ export const useJupiterTrading = () => {
       }
 
       const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
-      const amount = Math.floor(usdcAmount * Math.pow(10, 6)); // USDC has 6 decimals
+      const SOL_MINT = 'So11111111111111111111111111111111111111112';
+
+      // Determine input mint and decimals
+      const inputMint = payWith === 'USDC' ? USDC_MINT : SOL_MINT;
+      const decimals = payWith === 'USDC' ? 6 : 9; // lamports for SOL
+      const amount = Math.floor(amountIn * Math.pow(10, decimals));
 
       const quote = await getQuote({
-        inputMint: USDC_MINT,
+        inputMint,
         outputMint: stockData.solana_address,
         amount,
-        slippageBps: 100 // 1% slippage
+        slippageBps: 300 // 3% slippage for xStocks
       });
 
       if (!quote) {
@@ -240,7 +351,7 @@ export const useJupiterTrading = () => {
         inputMint: stockData.solana_address,
         outputMint: USDC_MINT,
         amount,
-        slippageBps: 100 // 1% slippage
+        slippageBps: 300 // 3% slippage for xStocks
       });
 
       if (!quote) {
@@ -259,6 +370,7 @@ export const useJupiterTrading = () => {
     executeSwap,
     buyXStock,
     sellXStock,
+    checkSolBalance,
     loading,
     error,
     connected,

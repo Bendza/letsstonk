@@ -8,6 +8,7 @@ import { Logo } from "./Logo"
 import { WalletConnectButton } from "./WalletConnectButton"
 import { useWalletAuth } from "@/hooks/useWalletAuth"
 import { useWallet } from '@solana/wallet-adapter-react'
+import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { ClientOnly } from "./ClientOnly"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { TrendingUp, Shield, Zap, ArrowRight, CheckCircle, FileText, ExternalLink, Menu, LogOut, BarChart3, Users, DollarSign, Clock } from "lucide-react"
@@ -17,7 +18,6 @@ import { getSolscanLink } from "@/lib/solana-utils"
 import Link from "next/link"
 
 interface LandingPageProps {
-  onGetStarted: () => void
   onNavigate: (page: "landing" | "dashboard") => void
 }
 
@@ -25,12 +25,13 @@ interface XStockWithPrice extends XStock {
   price?: number
 }
 
-export function LandingPage({ onGetStarted, onNavigate }: LandingPageProps) {
+export function LandingPage({ onNavigate }: LandingPageProps) {
   const [showDisclaimer, setShowDisclaimer] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [featuredXStocks, setFeaturedXStocks] = useState<XStockWithPrice[]>([])
   const [pricesLoading, setPricesLoading] = useState(true)
   const { connected } = useWallet()
+  const { setVisible: setWalletModalVisible } = useWalletModal()
   const { isAuthenticated, user, hasProfile, hasPortfolio, signOut, manualAuth } = useWalletAuth()
 
   // Fetch featured xStocks for display
@@ -73,28 +74,27 @@ export function LandingPage({ onGetStarted, onNavigate }: LandingPageProps) {
     }
   }, [isAuthenticated, hasProfile, hasPortfolio, onNavigate])
 
+  // Remove auto-authentication - user needs to click Get Started again after connecting wallet
+
   const handleGetStarted = async () => {
-    if (isAuthenticated) {
-      if (hasProfile && hasPortfolio) {
-        // User has completed onboarding, go to dashboard
-        onNavigate("dashboard")
-      } else {
-        // User needs onboarding, show terms modal
-        setShowDisclaimer(true)
-      }
-    } else if (connected) {
-      // Wallet is connected but not authenticated, trigger authentication
-      await manualAuth()
-    } else {
-      // User needs to connect wallet first, show disclaimer
+    if (connected && !isAuthenticated) {
+      // Wallet is connected but not authenticated, show terms then authenticate
       setShowDisclaimer(true)
+    } else if (isAuthenticated) {
+      // User is authenticated, go to dashboard
+      onNavigate("dashboard")
     }
+    // If wallet is not connected, this button shouldn't be visible
   }
 
-  const handleDisclaimerAccept = () => {
+  const handleDisclaimerAccept = async () => {
     setShowDisclaimer(false)
-    // After accepting disclaimer, proceed to onboarding
-    onGetStarted()
+    
+    if (connected && !isAuthenticated) {
+      // Wallet is connected, trigger authentication
+      await manualAuth()
+    }
+    // Terms modal should only show when Get Started is clicked (wallet already connected)
   }
 
   const handleSignOut = async () => {
@@ -117,18 +117,7 @@ export function LandingPage({ onGetStarted, onNavigate }: LandingPageProps) {
             
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-4">
-              {/* Show Login button when wallet is connected but not authenticated */}
-              {connected && !isAuthenticated && (
-                <Button 
-                  onClick={manualAuth}
-                  variant="outline"
-                  className="text-gray-700 hover:text-gray-900"
-                >
-                  Login
-                </Button>
-              )}
-              
-              {/* Show Dashboard if user has completed onboarding */}
+              {/* Show Dashboard if user is fully authenticated */}
               {isAuthenticated && hasProfile && hasPortfolio && (
                 <Button 
                   onClick={() => onNavigate("dashboard")}
@@ -139,8 +128,8 @@ export function LandingPage({ onGetStarted, onNavigate }: LandingPageProps) {
                 </Button>
               )}
               
-              {/* Show Get Started if user needs onboarding */}
-              {isAuthenticated && (!hasProfile || !hasPortfolio) && (
+              {/* Show Get Started (Login) only when wallet is connected but not authenticated */}
+              {connected && !isAuthenticated && (
                 <Button 
                   onClick={handleGetStarted}
                   variant="ghost"
@@ -149,8 +138,8 @@ export function LandingPage({ onGetStarted, onNavigate }: LandingPageProps) {
                   Get Started
                 </Button>
               )}
-              
-              {/* Always show wallet connect button */}
+
+              {/* Show wallet connection status */}
               <ClientOnly fallback={<div className="w-32 h-10 bg-gray-200 animate-pulse rounded"></div>}>
                 <WalletConnectButton />
               </ClientOnly>
@@ -166,59 +155,40 @@ export function LandingPage({ onGetStarted, onNavigate }: LandingPageProps) {
                 </SheetTrigger>
                 <SheetContent side="right" className="w-80">
                   <div className="flex flex-col space-y-4 mt-8">
-                    {/* Always show wallet connection */}
+                    {/* Wallet connection */}
                     <div className="pb-4 border-b border-gray-200">
-                      <div className="text-sm font-medium text-gray-900 mb-3">Wallet Connection</div>
+                      <div className="text-sm font-medium text-gray-900 mb-3">Wallet</div>
                       <ClientOnly fallback={<div className="w-full h-10 bg-gray-200 animate-pulse rounded"></div>}>
                         <WalletConnectButton />
                       </ClientOnly>
                     </div>
-                    
-                    {/* Show Login button when wallet is connected but not authenticated */}
-                    {connected && !isAuthenticated && (
+
+                    {/* Show Dashboard if user is fully authenticated */}
+                    {isAuthenticated && hasProfile && hasPortfolio && (
                       <Button 
                         onClick={() => {
-                          manualAuth()
+                          onNavigate("dashboard")
                           setMobileMenuOpen(false)
                         }}
-                        variant="outline"
+                        variant="ghost"
                         className="justify-start"
                       >
-                        Login
+                        Dashboard
                       </Button>
                     )}
                     
-                    {/* Show navigation when authenticated */}
-                    {isAuthenticated && (
-                      <>
-                        {/* Show Dashboard if user has completed onboarding */}
-                        {hasProfile && hasPortfolio && (
-                          <Button 
-                            onClick={() => {
-                              onNavigate("dashboard")
-                              setMobileMenuOpen(false)
-                            }}
-                            variant="ghost"
-                            className="justify-start"
-                          >
-                            Dashboard
-                          </Button>
-                        )}
-                        
-                        {/* Show Get Started if user needs onboarding */}
-                        {(!hasProfile || !hasPortfolio) && (
-                          <Button 
-                            onClick={() => {
-                              handleGetStarted()
-                              setMobileMenuOpen(false)
-                            }}
-                            variant="ghost"
-                            className="justify-start"
-                          >
-                            Get Started
-                          </Button>
-                        )}
-                      </>
+                    {/* Show Get Started (Login) only when wallet is connected but not authenticated */}
+                    {connected && !isAuthenticated && (
+                      <Button 
+                        onClick={() => {
+                          handleGetStarted()
+                          setMobileMenuOpen(false)
+                        }}
+                        variant="secondary"
+                        className="justify-start"
+                      >
+                        Get Started
+                      </Button>
                     )}
                   </div>
                 </SheetContent>
@@ -247,34 +217,28 @@ export function LandingPage({ onGetStarted, onNavigate }: LandingPageProps) {
                 portfolio management on Solana blockchain.
               </p>
               
-              {/* Show wallet connection status */}
-              {connected && !isAuthenticated && (
-                <div className="mb-6 p-3 bg-amber-900/20 border border-amber-600/30 rounded-lg">
-                  <div className="flex items-center gap-3 text-amber-200">
-                    <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
-                    <span className="text-sm">Wallet connected, authenticating...</span>
-                  </div>
-                </div>
-              )}
-              
-              {isAuthenticated && !hasProfile && (
-                <div className="mb-6 p-3 bg-green-900/20 border border-green-600/30 rounded-lg">
-                  <div className="flex items-center gap-3 text-green-200">
-                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                    <span className="text-sm">Authenticated! Ready to get started.</span>
-                  </div>
-                </div>
-              )}
               
               <div className="flex flex-col sm:flex-row gap-4 mb-12">
                 <Button 
                   size="lg" 
                   className="btn-primary text-lg px-8 py-4 font-bold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105" 
-                  onClick={handleGetStarted}
+                  onClick={() => {
+                    if (isAuthenticated && hasProfile && hasPortfolio) {
+                      onNavigate("dashboard")
+                    } else if (connected && !isAuthenticated) {
+                      handleGetStarted() // This will show terms then authenticate
+                    } else if (connected && isAuthenticated) {
+                      onNavigate("dashboard")
+                    } else {
+                      setWalletModalVisible(true) // Show wallet selection directly
+                    }
+                  }}
                 >
-                  {isAuthenticated 
-                    ? (hasProfile && hasPortfolio ? "GO TO DASHBOARD" : "START TRADING")
-                    : "GET STARTED NOW"
+                  {isAuthenticated && hasProfile && hasPortfolio
+                    ? "GO TO DASHBOARD"
+                    : connected 
+                      ? (isAuthenticated ? "GO TO DASHBOARD" : "GET STARTED") 
+                      : "CONNECT WALLET"
                   }
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
@@ -282,10 +246,16 @@ export function LandingPage({ onGetStarted, onNavigate }: LandingPageProps) {
                   size="lg" 
                   variant="outline" 
                   className="btn-secondary text-lg px-8 py-4 bg-transparent border-2 border-gray-300 hover:border-gray-400 transition-all duration-200"
+                  onClick={() => window.open('https://xstocks.com/', '_blank')}
                 >
                   LEARN MORE
                   <FileText className="ml-2 h-5 w-5" />
                 </Button>
+              </div>
+
+              {/* Community tagline */}
+              <div className="mt-8">
+                <div className="text-md text-gray-200 font-medium uppercase tracking-wide">By Sol Devs for Solana Community</div>
               </div>
             </div>
             
@@ -318,7 +288,7 @@ export function LandingPage({ onGetStarted, onNavigate }: LandingPageProps) {
               <div className="text-gray-400 text-sm uppercase tracking-wide">Active Users</div>
             </div>
             <div>
-              <div className="text-3xl font-bold mb-2">0.1%</div>
+              <div className="text-3xl font-bold mb-2">0%</div>
               <div className="text-gray-400 text-sm uppercase tracking-wide">Management Fee</div>
             </div>
           </div>
@@ -615,17 +585,33 @@ export function LandingPage({ onGetStarted, onNavigate }: LandingPageProps) {
             <Button
               size="lg"
               className="bg-white hover:bg-gray-100 text-gray-900 font-semibold px-8 py-4 text-lg rounded-none"
-              onClick={handleGetStarted}
+              onClick={() => {
+                if (isAuthenticated && hasProfile && hasPortfolio) {
+                  onNavigate("dashboard")
+                } else if (connected && !isAuthenticated) {
+                  handleGetStarted() // This will show terms then authenticate
+                } else if (connected && isAuthenticated) {
+                  onNavigate("dashboard")
+                } else {
+                  setWalletModalVisible(true) // Show wallet selection directly
+                }
+              }}
             >
-              GET STARTED NOW
+              {isAuthenticated && hasProfile && hasPortfolio
+                ? "GO TO DASHBOARD"
+                : connected 
+                  ? (isAuthenticated ? "GO TO DASHBOARD" : "GET STARTED") 
+                  : "CONNECT WALLET"
+              }
               <ArrowRight className="ml-3 h-5 w-5" />
             </Button>
             <Button
               size="lg"
               variant="outline"
               className="border-2 border-white text-white hover:bg-white hover:text-gray-900 px-8 py-4 text-lg bg-transparent rounded-none"
+              onClick={() => window.open('https://xstocks.com/', '_blank')}
             >
-              READ DOCUMENTATION
+              LEARN MORE
               <FileText className="ml-3 h-5 w-5" />
             </Button>
           </div>

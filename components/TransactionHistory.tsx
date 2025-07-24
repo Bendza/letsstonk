@@ -18,114 +18,31 @@ import {
   ArrowDownRight,
   Copy,
 } from "lucide-react"
+import { useWallet } from '@solana/wallet-adapter-react'
+import { useTransactions } from "@/hooks/useTransactions"
+import { format } from "date-fns"
 
 interface TransactionHistoryProps {
   onNavigate: (page: "landing" | "dashboard" | "markets" | "portfolio" | "analytics" | "history" | "settings") => void
   onLogout: () => void
 }
 
-// Mock transaction data
-const mockTransactions = [
-  {
-    id: "tx_001",
-    date: "2024-01-15",
-    time: "14:32:15",
-    type: "buy",
-    symbol: "xTSLA",
-    name: "Tesla Inc",
-    quantity: 2.5,
-    price: 245.8,
-    total: 614.5,
-    fees: 0.12,
-    status: "confirmed",
-    signature: "5KJp9X2vN8qR7mL3wE6tY1uI4oP8sA9dF2gH7jK5nM1xC3vB6zQ4rT8yU2wE5tY7uI9oP1sA3dF6gH8jK2nM4xC7vB9z",
-    logo: "🚗",
-    priceImpact: 0.15,
-    slippage: 0.08,
-  },
-  {
-    id: "tx_002",
-    date: "2024-01-14",
-    time: "09:45:22",
-    type: "sell",
-    symbol: "xAAPL",
-    name: "Apple Inc",
-    quantity: 1.0,
-    price: 198.45,
-    total: 198.45,
-    fees: 0.08,
-    status: "confirmed",
-    signature: "3Hp7Y4wN6qR5mL1xE8tY3uI2oP6sA7dF4gH9jK3nM5xC1vB8zQ2rT6yU4wE7tY5uI1oP3sA5dF8gH1jK4nM6xC9vB2z",
-    logo: "🍎",
-    priceImpact: 0.12,
-    slippage: 0.05,
-  },
-  {
-    id: "tx_003",
-    date: "2024-01-12",
-    time: "16:18:45",
-    type: "buy",
-    symbol: "xMSFT",
-    name: "Microsoft Corporation",
-    quantity: 1.5,
-    price: 425.3,
-    total: 637.95,
-    fees: 0.15,
-    status: "confirmed",
-    signature: "7Lp1Z8xN4qR9mL5wE2tY7uI6oP4sA1dF8gH3jK7nM9xC5vB2zQ6rT4yU8wE1tY9uI3oP7sA9dF2gH5jK8nM2xC1vB6z",
-    logo: "💻",
-    priceImpact: 0.18,
-    slippage: 0.12,
-  },
-  {
-    id: "tx_004",
-    date: "2024-01-10",
-    time: "11:22:33",
-    type: "buy",
-    symbol: "xGOOGL",
-    name: "Alphabet Inc",
-    quantity: 3.0,
-    price: 172.85,
-    total: 518.55,
-    fees: 0.11,
-    status: "confirmed",
-    signature: "9Np5X2vN8qR3mL7wE4tY1uI8oP2sA5dF6gH1jK9nM3xC7vB4zQ8rT2yU6wE9tY3uI7oP5sA3dF4gH7jK6nM8xC1vB2z",
-    logo: "🔍",
-    priceImpact: 0.22,
-    slippage: 0.15,
-  },
-  {
-    id: "tx_005",
-    date: "2024-01-08",
-    time: "13:55:18",
-    type: "buy",
-    symbol: "xAMZN",
-    name: "Amazon.com Inc",
-    quantity: 2.0,
-    price: 188.9,
-    total: 377.8,
-    fees: 0.09,
-    status: "failed",
-    signature: "1Bp3Y6wN2qR7mL9wE6tY5uI4oP8sA1dF2gH5jK1nM7xC9vB6zQ4rT8yU2wE5tY7uI9oP1sA3dF6gH8jK2nM4xC7vB9z",
-    logo: "📦",
-    priceImpact: 0.28,
-    slippage: 0.2,
-    failureReason: "Insufficient slippage tolerance",
-  },
-]
-
 export function TransactionHistory({ onNavigate, onLogout }: TransactionHistoryProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [filterType, setFilterType] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
 
-  const filteredTransactions = mockTransactions.filter((tx) => {
+  const { publicKey } = useWallet()
+  const walletAddress = publicKey?.toBase58() || null
+  const { transactions, loading, error } = useTransactions(walletAddress)
+
+  const filteredTransactions = transactions.filter((tx) => {
     const matchesSearch =
-      tx.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tx.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tx.output_token.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tx.input_token.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tx.id.toLowerCase().includes(searchQuery.toLowerCase())
 
-    const matchesType = filterType === "all" || tx.type === filterType
+    const matchesType = filterType === "all" || tx.transaction_type === filterType
     const matchesStatus = filterStatus === "all" || tx.status === filterStatus
 
     return matchesSearch && matchesType && matchesStatus
@@ -180,14 +97,14 @@ export function TransactionHistory({ onNavigate, onLogout }: TransactionHistoryP
         <div className="grid md:grid-cols-4 gap-6 mb-8">
           <Card className="minimal-card">
             <CardContent className="p-6 text-center">
-              <div className="text-3xl font-bold text-gray-900 mb-2">{mockTransactions.length}</div>
+              <div className="text-3xl font-bold text-gray-900 mb-2">{transactions.length}</div>
               <div className="text-sm text-gray-600 uppercase tracking-wide">Total Transactions</div>
             </CardContent>
           </Card>
           <Card className="minimal-card">
             <CardContent className="p-6 text-center">
               <div className="text-3xl font-bold text-green-700 mb-2">
-                {mockTransactions.filter((tx) => tx.type === "buy").length}
+                {transactions.filter((tx) => tx.transaction_type === "buy").length}
               </div>
               <div className="text-sm text-gray-600 uppercase tracking-wide">Buy Orders</div>
             </CardContent>
@@ -195,7 +112,7 @@ export function TransactionHistory({ onNavigate, onLogout }: TransactionHistoryP
           <Card className="minimal-card">
             <CardContent className="p-6 text-center">
               <div className="text-3xl font-bold text-red-600 mb-2">
-                {mockTransactions.filter((tx) => tx.type === "sell").length}
+                {transactions.filter((tx) => tx.transaction_type === "sell").length}
               </div>
               <div className="text-sm text-gray-600 uppercase tracking-wide">Sell Orders</div>
             </CardContent>
@@ -203,7 +120,7 @@ export function TransactionHistory({ onNavigate, onLogout }: TransactionHistoryP
           <Card className="minimal-card">
             <CardContent className="p-6 text-center">
               <div className="text-3xl font-bold text-gray-900 mb-2">
-                ${mockTransactions.reduce((sum, tx) => sum + tx.fees, 0).toFixed(2)}
+                ${transactions.length}
               </div>
               <div className="text-sm text-gray-600 uppercase tracking-wide">Total Fees</div>
             </CardContent>
@@ -278,30 +195,30 @@ export function TransactionHistory({ onNavigate, onLogout }: TransactionHistoryP
                     <tr key={tx.id}>
                       <td>
                         <div>
-                          <div className="font-semibold">{tx.date}</div>
-                          <div className="text-sm text-gray-500">{tx.time}</div>
+                          <div className="font-semibold">{format(new Date(tx.timestamp), "MM/dd/yyyy")}</div>
+                          <div className="text-sm text-gray-500">{format(new Date(tx.timestamp), "HH:mm:ss")}</div>
                         </div>
                       </td>
                       <td>
                         <Badge
                           className={`rounded-none ${
-                            tx.type === "buy" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                            tx.transaction_type === "buy" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
                           }`}
                         >
-                          {tx.type === "buy" ? (
+                          {tx.transaction_type === "buy" ? (
                             <ArrowUpRight className="h-3 w-3 mr-1" />
                           ) : (
                             <ArrowDownRight className="h-3 w-3 mr-1" />
                           )}
-                          {tx.type.toUpperCase()}
+                          {tx.transaction_type.toUpperCase()}
                         </Badge>
                       </td>
                       <td>
                         <div className="flex items-center gap-3">
-                          <span className="text-2xl">{tx.logo}</span>
+                          <span className="text-2xl">{tx.output_token.symbol}</span>
                           <div>
-                            <div className="font-semibold">{tx.symbol}</div>
-                            <div className="text-sm text-gray-500">{tx.name}</div>
+                            <div className="font-semibold">{tx.output_token.symbol}</div>
+                            <div className="text-sm text-gray-500">{tx.output_token.name}</div>
                           </div>
                         </div>
                       </td>

@@ -26,11 +26,7 @@ export default function PortfolioPage() {
 
   // Show loading while checking auth state or portfolio data
   if (authLoading || portfolioLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
-      </div>
-    )
+    return null // Let Portfolio component handle its own loading state
   }
 
   // Show message if not authenticated instead of redirecting

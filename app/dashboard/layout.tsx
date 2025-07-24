@@ -114,7 +114,15 @@ export default function DashboardLayout({
   const { signOut } = useWalletAuth()
   
   const handleLogout = async () => {
-    await signOut()
+    try {
+      await signOut()
+      // Optionally redirect to home page after logout
+      window.location.href = '/'
+    } catch (error) {
+      console.error('Logout failed:', error)
+      // Even if logout fails, redirect to home page
+      window.location.href = '/'
+    }
   }
 
   return (

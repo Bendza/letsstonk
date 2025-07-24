@@ -455,7 +455,6 @@ function PortfolioPreviewStep({ formData, calculatePortfolioAllocation, getPortf
         <div className="mt-4">
           <Button
             onClick={async () => {
-              console.log('🔍 Testing xStock availability...');
               // This will be available once we pass the test function down
             }}
             variant="outline"
