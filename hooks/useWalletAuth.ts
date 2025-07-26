@@ -139,21 +139,7 @@ export function useWalletAuth() {
 
   const signOut = async () => {
     try {
-      
-      // First disconnect the wallet
-      if (connected) {
-        await disconnect();
-      }
-      
-      // Then sign out from Supabase
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        console.error('Supabase signOut error:', error);
-        throw error;
-      }
-      
-      // Force update the state to logged out
+      // Immediately update state to prevent race conditions
       setState({
         user: null,
         isAuthenticated: false,
@@ -163,11 +149,26 @@ export function useWalletAuth() {
         hasPortfolio: false,
       });
       
+      // Perform cleanup operations in parallel
+      const cleanupPromises = [];
+      
+      // Add wallet disconnect if connected
+      if (connected) {
+        cleanupPromises.push(disconnect().catch(err => console.error('Wallet disconnect error:', err)));
+      }
+      
+      // Add Supabase signOut
+      cleanupPromises.push(
+        supabase.auth.signOut().catch(err => console.error('Supabase signOut error:', err))
+      );
+      
+      // Wait for all cleanup operations with timeout
+      await Promise.allSettled(cleanupPromises);
       
     } catch (error) {
       console.error('Logout error:', error);
       
-      // Even if there's an error, force the local state to logged out
+      // Ensure state is always updated even on error
       setState({
         user: null,
         isAuthenticated: false,
@@ -176,8 +177,6 @@ export function useWalletAuth() {
         hasProfile: false,
         hasPortfolio: false,
       });
-      
-      throw error;
     }
   };
 

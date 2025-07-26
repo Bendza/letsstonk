@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -8,15 +8,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, TrendingUp, Shield, AlertTriangle } from "lucide-react"
+import { Loader2, TrendingUp, Shield, AlertTriangle, Wallet } from "lucide-react"
 import { InvestmentFormSchema } from "../lib/types"
 import { getAllocationForRisk, calculatePositionAmounts } from "../lib/risk-engine"
-import { xStocksFetcher } from "../lib/fetchXStocks"
-import { useMockSwap } from "../hooks/useMockSwap"
-import { useMockWallet } from "./MockWalletProvider"
-import { MockWalletButton } from "./MockWalletButton"
+import { fetchXStocks, fetchPrices } from "../lib/fetchXStocks"
+import { useJupiterTrading } from "../hooks/useJupiterTrading"
+import { useWallet } from '@solana/wallet-adapter-react'
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
+import { usePortfolio } from "../hooks/usePortfolio"
 
-const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+const SOL_MINT = "So11111111111111111111111111111111111111112"
 
 const riskLabels = {
   1: "Ultra Conservative",
@@ -32,76 +33,102 @@ const riskLabels = {
 }
 
 export function InvestForm() {
-  const { connected, publicKey } = useMockWallet()
+  const { connected, publicKey } = useWallet()
   const [riskLevel, setRiskLevel] = useState(5)
-  const [usdcAmount, setUsdcAmount] = useState("")
+  const [solAmount, setSolAmount] = useState("")
   const [isInvesting, setIsInvesting] = useState(false)
-  const { batchSwapMutation } = useMockSwap()
+  const [stocks, setStocks] = useState<any[]>([])
+  const [stockPrices, setStockPrices] = useState<Record<string, number>>({})
+  const [loading, setLoading] = useState(true)
+  const { buyXStock, loading: jupiterLoading, error: jupiterError, connected: jupiterConnected } = useJupiterTrading()
+  const { portfolio, syncPortfolio } = usePortfolio(publicKey?.toString() || null)
 
-  // Fetch xStocks data
-  const { data: xStocks, isLoading: isLoadingStocks } = useQuery({
-    queryKey: ["xstocks"],
-    queryFn: () => xStocksFetcher.fetchXStocks(),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    refetchInterval: 5 * 60 * 1000,
-  })
+  // Fetch xStocks data and prices (same as Markets page)
+  useEffect(() => {
+    const fetchStockData = async () => {
+      try {
+        setLoading(true)
+        
+        // Fetch xStocks metadata from database (same as Markets)
+        const xStocks = await fetchXStocks()
+        
+        if (xStocks.length === 0) {
+          console.error('No xStocks found in database')
+          return
+        }
 
-  // Get xStock addresses mapping
-  const { data: xStockAddresses } = useQuery({
-    queryKey: ["xstock-addresses"],
-    queryFn: () => xStocksFetcher.getXStockAddresses(),
-    enabled: !!xStocks,
-    staleTime: 5 * 60 * 1000,
-  })
+        // Fetch live prices only for tokens with valid addresses
+        const validStocks = xStocks.filter(stock => stock.address && stock.address.length > 0)
+        const addresses = validStocks.map(stock => stock.address)
+        
+        const prices = await fetchPrices(addresses)
+
+        setStocks(xStocks)
+        setStockPrices(prices)
+      } catch (err) {
+        console.error('Failed to fetch stock data:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchStockData()
+  }, [])
 
   const allocation = getAllocationForRisk(riskLevel)
-  const amount = Number.parseFloat(usdcAmount) || 0
+  const amount = Number.parseFloat(solAmount) || 0
 
   const handleInvest = async () => {
-    if (!connected || !publicKey || !xStockAddresses) {
+    if (!connected || !publicKey || !jupiterConnected) {
       return
     }
 
     try {
-      // Validate form
-      const formData = InvestmentFormSchema.parse({
-        riskLevel,
-        usdcAmount: amount,
-        walletAddress: publicKey.toString(),
-      })
-
       setIsInvesting(true)
 
-      // Calculate position amounts
-      const positions = calculatePositionAmounts(formData.usdcAmount, formData.riskLevel, xStockAddresses)
-
-      // Create swap parameters for each position
-      const swapParams = positions
-        .filter((pos) => pos.address && pos.amount > 0)
-        .map((pos) => ({
-          inputMint: USDC_MINT,
-          outputMint: pos.address,
-          amount: Math.floor(pos.amount * 1_000_000), // Convert to USDC decimals (6)
-          slippageBps: 50, // 0.5% slippage
-        }))
-
-      if (swapParams.length === 0) {
-        throw new Error("No valid positions to invest in")
+      // Get allocation for risk level
+      const allocations = getAllocationForRisk(riskLevel)
+      const portfolioId = portfolio?.id
+      
+      // Process each allocation sequentially to avoid overwhelming the network
+      for (const allocation of allocations) {
+        const solAllocation = (amount * allocation.percentage) / 100
+        
+        if (solAllocation > 0.001) { // Only trade if allocation is meaningful (> 0.001 SOL)
+          try {
+            console.log(`Buying ${allocation.symbol} with ${solAllocation} SOL`)
+            const signature = await buyXStock(allocation.symbol, solAllocation, portfolioId, 'SOL')
+            
+            if (signature) {
+              console.log(`Successfully bought ${allocation.symbol}:`, signature)
+            } else {
+              console.error(`Failed to buy ${allocation.symbol}`)
+            }
+            
+            // Small delay between trades to avoid rate limits
+            await new Promise(resolve => setTimeout(resolve, 1000))
+          } catch (error) {
+            console.error(`Error buying ${allocation.symbol}:`, error)
+          }
+        }
       }
-
-      // Execute batch swap
-      const results = await batchSwapMutation.mutateAsync(swapParams)
-
-
-      // TODO: Store investment record in Supabase
-      // TODO: Redirect to portfolio dashboard
+      
+      // Sync portfolio after all trades
+      if (syncPortfolio) {
+        await syncPortfolio()
+      }
+      
+      // Reset form
+      setSolAmount("")
+      
     } catch (error) {
+      console.error('Investment failed:', error)
     } finally {
       setIsInvesting(false)
     }
   }
 
-  const isFormValid = connected && amount > 0 && amount <= 1000000 && !isLoadingStocks
+  const isFormValid = connected && amount > 0 && amount <= 100 && !loading // Max 100 SOL
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -125,27 +152,38 @@ export function InvestForm() {
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {/* Mock Wallet Connection */}
-          <div className="flex justify-center">
-            <MockWalletButton />
-          </div>
+          {/* Wallet Connection */}
+          {!connected && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <Wallet className="w-5 h-5 text-amber-600" />
+                <div>
+                  <div className="text-sm font-medium text-amber-800">Connect Wallet Required</div>
+                  <div className="text-xs text-amber-700">Please connect your Solana wallet to invest</div>
+                </div>
+              </div>
+              <div className="mt-3 flex justify-center">
+                <WalletMultiButton />
+              </div>
+            </div>
+          )}
 
           {connected && (
             <>
               {/* Investment Amount */}
               <div className="space-y-2">
-                <Label htmlFor="amount">Investment Amount (USDC)</Label>
+                <Label htmlFor="amount">Investment Amount (SOL)</Label>
                 <Input
                   id="amount"
                   type="number"
-                  placeholder="Enter USDC amount"
-                  value={usdcAmount}
-                  onChange={(e) => setUsdcAmount(e.target.value)}
-                  min="1"
-                  max="1000000"
+                  placeholder="Enter SOL amount"
+                  value={solAmount}
+                  onChange={(e) => setSolAmount(e.target.value)}
+                  min="0.1"
+                  max="100"
                   step="0.01"
                 />
-                <p className="text-sm text-muted-foreground">Minimum: $1 USDC • Maximum: $1,000,000 USDC</p>
+                <p className="text-sm text-muted-foreground">Minimum: 0.1 SOL • Maximum: 100 SOL</p>
               </div>
 
               {/* Risk Level Slider */}
@@ -178,15 +216,28 @@ export function InvestForm() {
                 <div className="space-y-3">
                   <Label>Portfolio Allocation</Label>
                   <div className="grid gap-2">
-                    {allocation.map((item) => (
-                      <div key={item.symbol} className="flex justify-between items-center p-2 bg-muted rounded">
-                        <span className="font-medium">{item.symbol}</span>
-                        <div className="text-right">
-                          <div className="font-medium">${((amount * item.percentage) / 100).toFixed(2)}</div>
-                          <div className="text-sm text-muted-foreground">{item.percentage}%</div>
+                    {allocation.map((item) => {
+                      const solAllocation = (amount * item.percentage) / 100
+                      const stockPrice = stockPrices[stocks.find(s => s.symbol === item.symbol)?.address || '']
+                      const estimatedShares = stockPrice ? solAllocation / stockPrice : 0
+                      
+                      return (
+                        <div key={item.symbol} className="flex justify-between items-center p-2 bg-muted rounded">
+                          <div>
+                            <span className="font-medium">{item.symbol}</span>
+                            {stockPrice && (
+                              <div className="text-xs text-muted-foreground">
+                                ~{estimatedShares.toFixed(4)} shares @ ${stockPrice.toFixed(2)}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <div className="font-medium">{solAllocation.toFixed(3)} SOL</div>
+                            <div className="text-sm text-muted-foreground">{item.percentage}%</div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -194,9 +245,15 @@ export function InvestForm() {
           )}
         </CardContent>
 
-        <CardFooter>
-          <Button onClick={handleInvest} disabled={!isFormValid || isInvesting} className="w-full" size="lg">
-            {isInvesting ? (
+        <CardFooter className="space-y-4">
+          {jupiterError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 w-full">
+              <div className="text-red-800 text-sm">{jupiterError}</div>
+            </div>
+          )}
+          
+          <Button onClick={handleInvest} disabled={!isFormValid || isInvesting || jupiterLoading} className="w-full" size="lg">
+            {isInvesting || jupiterLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Processing Investment...
@@ -208,11 +265,11 @@ export function InvestForm() {
         </CardFooter>
       </Card>
 
-      {/* Rate Limiting Info */}
+      {/* Real Trading Info */}
       <Alert>
         <AlertDescription>
-          <strong>Rate Limiting:</strong> For high-frequency trading, consider upgrading to Jupiter's paid Portal API
-          for higher rate limits. Current limit: 7 trades/minute on lite-api.jup.ag.
+          <strong>Real Trading:</strong> This uses Jupiter's swap aggregator for on-chain trading on Solana mainnet.
+          Transactions require SOL for fees and may take 15-30 seconds to confirm.
         </AlertDescription>
       </Alert>
     </div>

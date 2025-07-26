@@ -116,12 +116,16 @@ export default function DashboardLayout({
   const handleLogout = async () => {
     try {
       await signOut()
-      // Optionally redirect to home page after logout
-      window.location.href = '/'
+      // Small delay to ensure cleanup completes
+      setTimeout(() => {
+        window.location.href = '/'
+      }, 100)
     } catch (error) {
       console.error('Logout failed:', error)
       // Even if logout fails, redirect to home page
-      window.location.href = '/'
+      setTimeout(() => {
+        window.location.href = '/'
+      }, 100)
     }
   }
 

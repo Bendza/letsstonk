@@ -279,12 +279,12 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <h3 className="text-sm font-medium text-gray-400 mb-4 uppercase tracking-wide">Contract Address</h3>
             <div className="flex items-center gap-3">
               <div className="w-120 bg-gray-800 px-4 py-3 rounded border border-gray-700 text-sm font-mono text-gray-200 truncate">
-                2jDtemzzyNdsG3yhj7zBwqzX4UaZZHngcmXP9Ynjjups
+              2jDtemzzyNdsG3yhj7zBwqzX4UaZZHngcmXP9Ynjjups
               </div>
               <Button
                 className={`btn-primary flex-shrink-0 w-12 h-12 p-0 transition-all duration-300 ${copied ? 'bg-green-600 hover:bg-green-700' : ''}`}
                 onClick={() => {
-                  navigator.clipboard.writeText('7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU')
+                  navigator.clipboard.writeText('2jDtemzzyNdsG3yhj7zBwqzX4UaZZHngcmXP9Ynjjups')
                   setCopied(true)
                   setTimeout(() => setCopied(false), 2000)
                 }}
@@ -298,25 +298,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             </div>
           </div>
           
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 pt-16 mt-16 border-t border-gray-800">
-            <div>
-              <div className="text-3xl font-bold mb-2">$2.5M+</div>
-              <div className="text-gray-400 text-sm uppercase tracking-wide">Assets Managed</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold mb-2">15.2%</div>
-              <div className="text-gray-400 text-sm uppercase tracking-wide">Avg Annual Return</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold mb-2">2,500+</div>
-              <div className="text-gray-400 text-sm uppercase tracking-wide">Active Users</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold mb-2">0%</div>
-              <div className="text-gray-400 text-sm uppercase tracking-wide">Management Fee</div>
-            </div>
-          </div>
+  
         </div>
       </section>
 
