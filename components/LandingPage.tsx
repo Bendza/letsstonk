@@ -279,7 +279,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <h3 className="text-sm font-medium text-gray-400 mb-4 uppercase tracking-wide">Contract Address</h3>
             <div className="flex items-center gap-3">
               <div className="w-120 bg-gray-800 px-4 py-3 rounded border border-gray-700 text-sm font-mono text-gray-200 truncate">
-                7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU
+              2jDtemzzyNdsG3yhj7zBwqzX4UaZZHngcmXP9Ynjjups
               </div>
               <Button
                 className={`btn-primary flex-shrink-0 w-12 h-12 p-0 transition-all duration-300 ${copied ? 'bg-green-600 hover:bg-green-700' : ''}`}
