@@ -11,7 +11,7 @@ import { useWallet } from '@solana/wallet-adapter-react'
 import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { ClientOnly } from "./ClientOnly"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { TrendingUp, Shield, Zap, ArrowRight, CheckCircle, FileText, ExternalLink, Menu, LogOut, BarChart3, Users, DollarSign, Clock } from "lucide-react"
+import { TrendingUp, Shield, Zap, ArrowRight, CheckCircle, FileText, ExternalLink, Menu, LogOut, BarChart3, Users, DollarSign, Clock, Copy, Check } from "lucide-react"
 import { fetchXStocks, fetchPrices } from "@/lib/fetchXStocks"
 import { XStock } from "@/lib/types"
 import { getSolscanLink } from "@/lib/solana-utils"
@@ -30,6 +30,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [featuredXStocks, setFeaturedXStocks] = useState<XStockWithPrice[]>([])
   const [pricesLoading, setPricesLoading] = useState(true)
+  const [copied, setCopied] = useState(false)
   const { connected } = useWallet()
   const { setVisible: setWalletModalVisible } = useWalletModal()
   const { isAuthenticated, user, hasProfile, hasPortfolio, signOut, manualAuth } = useWalletAuth()
@@ -273,6 +274,30 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             </div>
           </div>
           
+          {/* Contract Address */}
+          <div className="flex flex-col items-center justify-center mt-16">
+            <h3 className="text-sm font-medium text-gray-400 mb-4 uppercase tracking-wide">Contract Address</h3>
+            <div className="flex items-center gap-3">
+              <div className="w-120 bg-gray-800 px-4 py-3 rounded border border-gray-700 text-sm font-mono text-gray-200 truncate">
+                7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU
+              </div>
+              <Button
+                className={`btn-primary flex-shrink-0 w-12 h-12 p-0 transition-all duration-300 ${copied ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                onClick={() => {
+                  navigator.clipboard.writeText('7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU')
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 2000)
+                }}
+              >
+                {copied ? (
+                  <Check className="h-5 w-5 animate-in zoom-in-50 duration-200" />
+                ) : (
+                  <Copy className="h-5 w-5" />
+                )}
+              </Button>
+            </div>
+          </div>
+          
           {/* Stats Grid */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 pt-16 mt-16 border-t border-gray-800">
             <div>
@@ -294,6 +319,8 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
           </div>
         </div>
       </section>
+
+
 
       {/* Features Section */}
       <section className="py-24 bg-gray-50">
@@ -568,6 +595,8 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                   {featuredXStocks.length > 0 ? `15+ STOCKS AVAILABLE` : 'LOADING STOCKS...'}
                 </Badge>
               </div>
+              
+
             </div>
           </div>
         </div>

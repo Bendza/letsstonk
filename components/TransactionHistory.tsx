@@ -20,6 +20,7 @@ import {
 import { useWallet } from "@solana/wallet-adapter-react"
 import { useTransactions } from "@/hooks/useTransactions"
 import { SolscanLogo } from "@/components/SolscanLogo"
+import { CURATED_XSTOCKS } from "@/lib/xstocks-config"
 
 export function TransactionHistory() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -55,40 +56,80 @@ export function TransactionHistory() {
     }
   })
 
-  // Enhanced token info mapping with proper decimals
+  // Enhanced token info mapping with proper logos and decimals
   const getTokenInfo = (address: string) => {
-    const tokenMap: Record<string, { symbol: string; name: string; logo: string; decimals: number }> = {
-      'So11111111111111111111111111111111111111112': { symbol: 'SOL', name: 'Solana', logo: '◎', decimals: 9 },
-      'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': { symbol: 'USDC', name: 'USD Coin', logo: '💵', decimals: 6 },
-      
-      // xStock tokens - most use 6 decimals
-      'XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB': { symbol: 'TSLAx', name: 'Tesla xStock', logo: '🚗', decimals: 6 },
-      'XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp': { symbol: 'AAPLx', name: 'Apple xStock', logo: '🍎', decimals: 6 },
-      'XsCPL9dNWBMvFtTmwcCA5v3xWPSMEBCszbQdiLLq6aN': { symbol: 'GOOGLx', name: 'Google xStock', logo: '🔍', decimals: 6 },
-      'Xs3eBt7uRfJX8QUs4suhyU8p2M6DoUDrJyWBa8LLZsg': { symbol: 'AMZNx', name: 'Amazon xStock', logo: '📦', decimals: 6 },
-      'Xs8S1uUs1zvS2p7iwtsG3b6fkhpvmwz4GYU3gWAmWHZ': { symbol: 'NVDAx', name: 'NVIDIA xStock', logo: '🎮', decimals: 6 },
-      'Xs151QeqTCiuKtinzfRATnUESM2xTU6V9Vy538ci': { symbol: 'WMTx', name: 'Walmart xStock', logo: '🛒', decimals: 6 },
-      'Xsa62P5mvPszXL1krVUnU5ar38bBSVcWAB6fmPCo5Zu': { symbol: 'PGx', name: 'P&G xStock', logo: '🧴', decimals: 6 },
-      
-      // QQQ xStock from the actual transaction
-      'QQQQj3HGQp3mKpJYr0FKJE5iWsJDBRBRnXmEMp1JaTE': { symbol: 'QQQx', name: 'QQQ xStock', logo: '📊', decimals: 6 },
+    // First check for base tokens (SOL, USDC)
+    const baseTokens: Record<string, { symbol: string; name: string; logoURI?: string; emoji: string; decimals: number }> = {
+      'So11111111111111111111111111111111111111112': { symbol: 'SOL', name: 'Solana', emoji: '◎', decimals: 9 },
+      'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': { symbol: 'USDC', name: 'USD Coin', emoji: '💵', decimals: 6 },
     }
     
-    if (tokenMap[address]) {
-      return tokenMap[address]
+    if (baseTokens[address]) {
+      return baseTokens[address]
+    }
+    
+    // Check if it's a curated xStock token
+    const xStock = CURATED_XSTOCKS.find(stock => stock.address === address)
+    if (xStock) {
+      return {
+        symbol: xStock.symbol,
+        name: xStock.name,
+        logoURI: xStock.logo,
+        emoji: getEmojiForSymbol(xStock.symbol),
+        decimals: 6
+      }
+    }
+    
+    // Fallback mapping for additional tokens not in curated list
+    const fallbackTokens: Record<string, { symbol: string; name: string; emoji: string; decimals: number }> = {
+      'Xs8S1uUs1zvS2p7iwtsG3b6fkhpvmwz4GYU3gWAmWHZ': { symbol: 'NVDAx', name: 'NVIDIA xStock', emoji: '🎮', decimals: 6 },
+      'QQQQj3HGQp3mKpJYr0FKJE5iWsJDBRBRnXmEMp1JaTE': { symbol: 'QQQx', name: 'QQQ xStock', emoji: '📊', decimals: 6 },
+    }
+    
+    if (fallbackTokens[address]) {
+      return fallbackTokens[address]
     }
     
     // Check if it's an xStock by address pattern
     if (address.startsWith('Xs') || address.startsWith('QQQQ')) {
-      return { symbol: 'xStock', name: 'Tokenized Stock', logo: '📈', decimals: 6 }
+      return { symbol: 'xStock', name: 'Tokenized Stock', emoji: '📈', decimals: 6 }
     }
     
     return { 
       symbol: `${address.slice(0, 4)}...${address.slice(-4)}`, 
       name: 'Unknown Token',
-      logo: '❓',
+      emoji: '❓',
       decimals: 6
     }
+  }
+
+  // Helper function to get emoji fallbacks for xStock symbols
+  const getEmojiForSymbol = (symbol: string): string => {
+    const emojiMap: Record<string, string> = {
+      'TSLAx': '🚗',
+      'AAPLx': '🍎',
+      'GOOGLx': '🔍',
+      'AMZNx': '📦',
+      'NVDAx': '🎮',
+      'WMTx': '🛒',
+      'PGx': '🧴',
+      'UNHx': '🏥',
+      'Vx': '💳',
+      'ABTx': '🧬',
+      'ABBVx': '💊',
+      'ACNx': '💼',
+      'AMBRx': '🟨',
+      'APPx': '📱',
+      'AZNx': '🏥',
+      'BACx': '🏦',
+      'BRK.Bx': '📈',
+      'AVGOx': '🔧',
+      'CVXx': '⛽',
+      'CRCLx': '⭕',
+      'CSCOx': '🌐',
+      'KOx': '🥤',
+    }
+    return emojiMap[symbol] || '📈'
   }
 
   const getSolscanUrl = (signature: string) => {
@@ -331,7 +372,27 @@ export function TransactionHistory() {
                         </td>
                         <td>
                           <div className="flex items-center gap-3">
-                            <span className="text-2xl">{inputToken.logo}</span>
+                            <div className="w-8 h-8 flex items-center justify-center">
+                              {inputToken.logoURI ? (
+                                <img 
+                                  src={inputToken.logoURI} 
+                                  alt={`${inputToken.symbol} logo`} 
+                                  className="w-8 h-8 rounded-full object-contain bg-white border border-gray-200"
+                                  onError={(e) => {
+                                    const img = e.currentTarget
+                                    const fallback = img.nextElementSibling as HTMLElement
+                                    img.style.display = 'none'
+                                    if (fallback) fallback.style.display = 'block'
+                                  }}
+                                />
+                              ) : null}
+                              <span 
+                                className="text-2xl" 
+                                style={{ display: inputToken.logoURI ? 'none' : 'block' }}
+                              >
+                                {inputToken.emoji}
+                              </span>
+                            </div>
                             <div>
                               <div className="font-semibold">{inputToken.symbol}</div>
                               <div className="text-sm text-gray-500">{inputToken.name}</div>
@@ -340,7 +401,27 @@ export function TransactionHistory() {
                         </td>
                         <td>
                           <div className="flex items-center gap-3">
-                            <span className="text-2xl">{outputToken.logo}</span>
+                            <div className="w-8 h-8 flex items-center justify-center">
+                              {outputToken.logoURI ? (
+                                <img 
+                                  src={outputToken.logoURI} 
+                                  alt={`${outputToken.symbol} logo`} 
+                                  className="w-8 h-8 rounded-full object-contain bg-white border border-gray-200"
+                                  onError={(e) => {
+                                    const img = e.currentTarget
+                                    const fallback = img.nextElementSibling as HTMLElement
+                                    img.style.display = 'none'
+                                    if (fallback) fallback.style.display = 'block'
+                                  }}
+                                />
+                              ) : null}
+                              <span 
+                                className="text-2xl" 
+                                style={{ display: outputToken.logoURI ? 'none' : 'block' }}
+                              >
+                                {outputToken.emoji}
+                              </span>
+                            </div>
                             <div>
                               <div className="font-semibold">{outputToken.symbol}</div>
                               <div className="text-sm text-gray-500">{outputToken.name}</div>
