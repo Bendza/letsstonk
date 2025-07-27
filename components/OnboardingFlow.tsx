@@ -761,12 +761,17 @@ function ExecuteTradesStep({ formData, connected, publicKey, calculatePortfolioA
         
         setStatus(prev => ({
           ...prev,
-          details: [...(prev.details || []), `💰 Buying ${stockSymbol}: $${position.usdcAmount.toFixed(0)} USDC...`]
+          details: [...(prev.details || []), `💰 Buying ${stockSymbol}: ${(position.usdcAmount / 200).toFixed(4)} SOL...`]
         }));
 
         try {
-          // Use the exact same function as TradingModal!
-          const signature = await buyXStock(stockSymbol, position.usdcAmount, undefined, 'USDC');
+          // Use the exact same function as TradingModal with SOL!
+          // Convert USDC amount to SOL amount (rough conversion for now)
+          const solAmount = position.usdcAmount / 200; // Approximate SOL price conversion
+          
+          console.log(`[PORTFOLIO] Buying ${stockSymbol} with ${solAmount.toFixed(4)} SOL (was ${position.usdcAmount} USDC)`);
+          
+          const signature = await buyXStock(stockSymbol, solAmount, undefined, 'SOL');
           
           if (signature) {
             successCount++;
@@ -807,7 +812,7 @@ function ExecuteTradesStep({ formData, connected, publicKey, calculatePortfolioA
           message: `All ${successCount} positions have been created in your wallet.`,
           details: [
             `💼 ${successCount} xStock positions acquired`,
-            `💰 Total investment: $${formData.initialInvestment} USDC`,
+            `💰 Total investment: ${(formData.initialInvestment / 200).toFixed(4)} SOL`,
             `🎯 Risk level: ${formData.riskTolerance}/10`,
             '🔗 All transactions recorded on Solana blockchain'
           ]
@@ -980,11 +985,12 @@ function ExecuteTradesStep({ formData, connected, publicKey, calculatePortfolioA
             <p className="text-green-900 font-semibold mb-2 text-sm">Same Trading Engine as Markets</p>
             <p className="text-green-800 text-xs mb-2">
               This uses the <strong>identical buyXStock() function</strong> as individual trades on the Markets page. 
-              Each position will be purchased separately using proven Jupiter swaps.
+              Each position will be purchased separately using proven Jupiter swaps with <strong>SOL</strong>.
             </p>
-            <div className="text-green-700 text-xs space-y-1">
+            <div className="grid grid-cols-1 gap-1 text-xs text-green-700">
               <div>• Exact same code path as Markets → TradingModal</div>
               <div>• Each xStock purchased individually for reliability</div>
+              <div>• Uses SOL for payments (same as Markets page)</div>
               <div>• No simulation issues - direct API integration</div>
             </div>
           </div>
