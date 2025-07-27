@@ -1127,6 +1127,61 @@ function ExecuteTradesStep({ formData, connected, publicKey, calculatePortfolioA
       {/* Consolidated Status Display */}
       <StatusDisplay />
 
+      {/* Execute Button - Only show if not already executing and wallet is connected */}
+      {connected && publicKey && !isExecuting && status.type !== 'success' && (
+        <div className="flex justify-center">
+          <Button
+            onClick={handleExecuteTrades}
+            disabled={isExecuting || jupiterLoading}
+            className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 text-base font-semibold"
+          >
+            {isExecuting || jupiterLoading ? (
+              <>
+                <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                Creating Portfolio...
+              </>
+            ) : (
+              <>
+                <TrendingUp className="h-5 w-5 mr-2" />
+                Execute Portfolio Creation
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+
+      {/* Success Actions */}
+      {status.type === 'success' && (
+        <div className="flex justify-center">
+          <div className="text-center">
+            <div className="text-green-600 font-semibold mb-2">
+              🎉 Portfolio Created Successfully!
+            </div>
+            <div className="text-sm text-gray-600">
+              Redirecting to your portfolio in a few seconds...
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error Actions */}
+      {status.type === 'error' && (
+        <div className="flex justify-center">
+          <Button
+            onClick={() => {
+              setStatus({
+                type: 'idle',
+                title: 'Ready to Create Portfolio',
+                message: 'Click the button below to execute your portfolio creation using real Jupiter swaps.'
+              });
+            }}
+            variant="outline"
+            className="px-6 py-2"
+          >
+            Try Again
+          </Button>
+        </div>
+      )}
 
       {/* Disclaimer */}
       <div className="text-center text-xs text-gray-500 max-w-xl mx-auto">
