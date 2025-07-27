@@ -3,6 +3,8 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { Connection, PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { createJupiterApiClient } from '@jup-ag/api';
 import { getTradingRpcUrl } from '@/lib/rpc-config';
+import { getAllocationForRisk } from '@/lib/risk-engine';
+import { fetchXStocks, fetchPrices } from '@/lib/fetchXStocks';
 
 // Real xStocks token mint addresses from Backed Finance
 const XSTOCK_MINTS = {
@@ -34,9 +36,10 @@ interface SwapQuote {
 
 interface PortfolioAllocation {
   symbol: string;
-  allocation: number; // percentage
+  allocation: number;
   usdcAmount: number;
   estimatedTokens: number;
+  currentPrice?: number;
 }
 
 interface SwapResult {
@@ -97,6 +100,63 @@ export function useJupiterSwap() {
       usdcAmount: (totalUsdcAmount * allocation.percentage) / 100,
       estimatedTokens: 0, // Will be calculated with quotes
     }));
+  }, []);
+
+  // Calculate portfolio allocation with current PRICES for preview (not swap quotes)
+  const calculatePortfolioAllocationWithPrices = useCallback(async (
+    riskLevel: number,
+    totalUsdcAmount: number
+  ): Promise<PortfolioAllocation[]> => {
+    try {
+      console.log(`[PREVIEW] Calculating allocation for risk level ${riskLevel}, amount ${totalUsdcAmount}`);
+      
+      // Get risk-based allocation from risk engine
+      const riskAllocations = getAllocationForRisk(riskLevel);
+      
+      // Fetch xStocks data and prices (same as Markets.tsx)
+      const xStocks = await fetchXStocks();
+      const addresses = xStocks.map(stock => stock.address);
+      const prices = await fetchPrices(addresses);
+      
+      // Create a map for easy lookup
+      const stockMap = new Map(xStocks.map(stock => [stock.symbol, stock]));
+      
+      const portfolioAllocations: PortfolioAllocation[] = riskAllocations.map(allocation => {
+        // Convert xTSLA -> TSLAx format for lookup
+        const lookupSymbol = allocation.symbol.replace('x', '') + 'x';
+        const stock = stockMap.get(lookupSymbol);
+        
+        const usdcAmount = (totalUsdcAmount * allocation.percentage) / 100;
+        const currentPrice = stock ? prices[stock.address] || 0 : 0;
+        const estimatedTokens = currentPrice > 0 ? usdcAmount / currentPrice : 0;
+        
+        console.log(`[PREVIEW] ${allocation.symbol} -> ${lookupSymbol}: $${currentPrice}, ${estimatedTokens} tokens`);
+        
+        return {
+          symbol: lookupSymbol, // Use the correct format (TSLAx, AAPLx, etc.)
+          allocation: allocation.percentage,
+          usdcAmount,
+          estimatedTokens,
+          currentPrice,
+        };
+      });
+      
+      console.log(`[PREVIEW] Portfolio allocation calculated with ${portfolioAllocations.length} positions`);
+      return portfolioAllocations;
+      
+    } catch (error) {
+      console.error('[PREVIEW] Error calculating portfolio allocation:', error);
+      
+      // Return basic allocation without prices on error
+      const riskAllocations = getAllocationForRisk(riskLevel);
+      return riskAllocations.map(allocation => ({
+        symbol: allocation.symbol.replace('x', '') + 'x',
+        allocation: allocation.percentage,
+        usdcAmount: (totalUsdcAmount * allocation.percentage) / 100,
+        estimatedTokens: 0,
+        currentPrice: 0,
+      }));
+    }
   }, []);
 
   // Get quotes for entire portfolio
@@ -235,15 +295,11 @@ export function useJupiterSwap() {
   const createPortfolio = useCallback(async (
     portfolioAllocation: PortfolioAllocation[]
   ): Promise<{ success: boolean; results: SwapResult[]; error?: string }> => {
-    // For now, use mock portfolio creation since xStocks might not be available
-    return createMockPortfolio(portfolioAllocation);
-    
-    // Uncomment below for real Jupiter integration when tokens are available
-    /*
     if (!publicKey || !signTransaction) {
       return { success: false, results: [], error: 'Wallet not connected' };
     }
 
+    console.log('[PORTFOLIO] Starting real portfolio creation with Jupiter...');
     setIsLoading(true);
     setError(null);
 
@@ -251,63 +307,150 @@ export function useJupiterSwap() {
       // Filter out zero allocations and get valid tokens
       const validAllocations = portfolioAllocation.filter(allocation => {
         const tokenMint = XSTOCK_MINTS[allocation.symbol as keyof typeof XSTOCK_MINTS];
-        return allocation.usdcAmount > 0 && tokenMint;
+        const hasValidAmount = allocation.usdcAmount > 0;
+        console.log(`[PORTFOLIO] ${allocation.symbol}: $${allocation.usdcAmount}, mint: ${tokenMint}, valid: ${hasValidAmount && !!tokenMint}`);
+        return hasValidAmount && tokenMint;
       });
 
       if (validAllocations.length === 0) {
-        return { success: false, results: [], error: 'No valid allocations found' };
+        return { success: false, results: [], error: 'No valid allocations found. Ensure tokens have valid mint addresses.' };
       }
 
-      // Create a single batch swap transaction
-      const jupiterApiClient = createJupiterApiClient();
+      console.log(`[PORTFOLIO] Executing ${validAllocations.length} real Jupiter swaps...`);
       
-      // Get quotes for all swaps
-      const quotes = await Promise.all(
-        validAllocations.map(async (allocation) => {
+      // Execute individual swaps for each allocation using direct Jupiter API (like TradingModal)
+      const results: SwapResult[] = [];
+      let successCount = 0;
+      
+      for (const allocation of validAllocations) {
+        try {
           const tokenMint = XSTOCK_MINTS[allocation.symbol as keyof typeof XSTOCK_MINTS];
-          const quote = await jupiterApiClient.quoteGet({
-            inputMint: USDC_MINT,
-            outputMint: tokenMint,
-            amount: Math.floor(allocation.usdcAmount * 1_000_000), // Convert to USDC decimals
-            slippageBps: 100, // 1% slippage tolerance
+          const usdcAmount = Math.floor(allocation.usdcAmount * 1_000_000); // Convert to USDC decimals
+          
+          console.log(`[PORTFOLIO] Swapping ${allocation.usdcAmount} USDC -> ${allocation.symbol} (${tokenMint})`);
+          
+          // Step 1: Get quote using direct API call (like TradingModal)
+          const quoteResponse = await fetch(
+            `https://lite-api.jup.ag/swap/v1/quote?` +
+            `inputMint=${USDC_MINT}&` +
+            `outputMint=${tokenMint}&` +
+            `amount=${usdcAmount}&` +
+            `slippageBps=300&` + // 3% slippage like TradingModal
+            `onlyDirectRoutes=false&` +
+            `asLegacyTransaction=false`
+          );
+          
+          if (!quoteResponse.ok) {
+            throw new Error(`Failed to get quote: ${quoteResponse.status}`);
+          }
+          
+          const quote = await quoteResponse.json();
+          
+          // Step 2: Get swap transaction using direct API call (like TradingModal)
+          const swapResponse = await fetch('https://lite-api.jup.ag/swap/v1/swap', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              quoteResponse: quote,
+              userPublicKey: publicKey.toString(),
+              wrapAndUnwrapSol: true,
+              useSharedAccounts: true, // Better for ATA handling
+              dynamicComputeUnitLimit: true,
+              dynamicSlippage: { // Allow dynamic slippage adjustment
+                maxBps: 1000 // Max 10% slippage as fallback
+              },
+              prioritizationFeeLamports: {
+                priorityLevelWithMaxLamports: {
+                  maxLamports: 1000000, // Same as TradingModal
+                  priorityLevel: "medium"
+                }
+              }
+            })
           });
-          return { allocation, quote };
-        })
-      );
 
-      // For now, execute the largest allocation first as a single swap
-      // In a real implementation, you'd want to use Jupiter's batch swap API
-      const largestAllocation = validAllocations.reduce((prev, current) => 
-        prev.usdcAmount > current.usdcAmount ? prev : current
-      );
+          if (!swapResponse.ok) {
+            const errorText = await swapResponse.text();
+            throw new Error(`Failed to get swap transaction: ${swapResponse.status} ${errorText}`);
+          }
 
-      const tokenMint = XSTOCK_MINTS[largestAllocation.symbol as keyof typeof XSTOCK_MINTS];
-      const result = await executeSwap(
-        USDC_MINT,
-        tokenMint,
-        Math.floor(largestAllocation.usdcAmount * 1_000_000)
-      );
+          const { swapTransaction } = await swapResponse.json();
 
-      if (result.success) {
-        // For demo purposes, simulate success for other allocations
-        const results = validAllocations.map(allocation => ({
-          success: allocation === largestAllocation ? true : true, // Simulate success
-          signature: allocation === largestAllocation ? result.signature : 'simulated-tx-' + Math.random().toString(36).substr(2, 9)
-        }));
+          if (!swapTransaction) {
+            throw new Error('No swap transaction received from Jupiter');
+          }
 
-        return { success: true, results };
-      } else {
-        return { success: false, results: [result], error: result.error };
+          // Step 3: Execute transaction (same as TradingModal)
+          const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
+          const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
+          
+          const signedTransaction = await signTransaction(transaction);
+
+          // Send with same settings as TradingModal
+          const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
+            skipPreflight: true, // Skip preflight to avoid simulation issues!
+            maxRetries: 5,
+            preflightCommitment: 'processed'
+          });
+
+          // Confirm transaction
+          const latestBlockHash = await connection.getLatestBlockhash();
+          await connection.confirmTransaction({
+            blockhash: latestBlockHash.blockhash,
+            lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
+            signature
+          }, 'confirmed');
+
+          results.push({ success: true, signature });
+          successCount++;
+          console.log(`[PORTFOLIO] ✅ ${allocation.symbol} swap successful: ${signature}`);
+          
+          // Add small delay between swaps to avoid rate limiting
+          if (allocation !== validAllocations[validAllocations.length - 1]) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          
+        } catch (error) {
+          console.error(`[PORTFOLIO] Error swapping ${allocation.symbol}:`, error);
+          results.push({ 
+            success: false, 
+            error: error instanceof Error ? error.message : 'Unknown swap error' 
+          });
+        }
       }
+
+      const allSuccessful = successCount === validAllocations.length;
+      const partialSuccess = successCount > 0 && successCount < validAllocations.length;
+      
+      if (allSuccessful) {
+        console.log(`[PORTFOLIO] ✅ Portfolio creation complete! ${successCount}/${validAllocations.length} swaps successful`);
+        return { success: true, results };
+      } else if (partialSuccess) {
+        console.warn(`[PORTFOLIO] ⚠️ Partial success: ${successCount}/${validAllocations.length} swaps completed`);
+        return { 
+          success: false, 
+          results, 
+          error: `Partial portfolio creation: ${successCount}/${validAllocations.length} swaps successful. Some positions may be missing.` 
+        };
+      } else {
+        console.error(`[PORTFOLIO] ❌ Portfolio creation failed: No swaps were successful`);
+        return { 
+          success: false, 
+          results, 
+          error: 'Portfolio creation failed: All swaps failed. Check token availability and wallet balance.' 
+        };
+      }
+
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown portfolio creation error';
+      console.error('[PORTFOLIO] Portfolio creation error:', error);
       setError(errorMessage);
       return { success: false, results: [], error: errorMessage };
     } finally {
       setIsLoading(false);
     }
-    */
-  }, [publicKey, signTransaction, createMockPortfolio]);
+  }, [publicKey, signTransaction, connection]);
 
   // Test function to verify xStock tokens are available
   const testXStockAvailability = useCallback(async () => {
@@ -356,6 +499,7 @@ export function useJupiterSwap() {
   return {
     getSwapQuote,
     calculatePortfolioAllocation,
+    calculatePortfolioAllocationWithPrices,
     getPortfolioQuotes,
     executeSwap,
     createPortfolio,

@@ -8,11 +8,13 @@ import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { ArrowRight, ArrowLeft, TrendingUp, Shield, Target, CheckCircle, Loader2, DollarSign, PieChart } from "lucide-react"
+import { ArrowRight, ArrowLeft, TrendingUp, Shield, Target, CheckCircle, Loader2, DollarSign, PieChart as PieChartIcon, BarChart3, AlertCircle } from "lucide-react"
 import { WalletConnectButton } from "./WalletConnectButton"
 import { useWallet } from '@solana/wallet-adapter-react'
 import { useWalletAuth } from '@/hooks/useWalletAuth'
 import { useJupiterSwap } from '@/hooks/useJupiterSwap'
+import { useJupiterTrading } from '@/hooks/useJupiterTrading'
+import { ResponsiveContainer, Pie, PieChart, Cell, Tooltip } from 'recharts';
 
 export interface OnboardingData {
   riskTolerance: number
@@ -44,12 +46,20 @@ export function OnboardingFlow({ onComplete, onBack }: OnboardingFlowProps) {
   const { 
     getSwapQuote, 
     calculatePortfolioAllocation, 
+    calculatePortfolioAllocationWithPrices,
     getPortfolioQuotes, 
     createPortfolio,
     testXStockAvailability,
     isLoading: isSwapLoading, 
     error: swapError 
   } = useJupiterSwap()
+
+  // Use Jupiter Trading hook for actual portfolio creation (same as TradingModal)
+  const { 
+    buyXStock, 
+    loading: jupiterLoading, 
+    error: jupiterError 
+  } = useJupiterTrading()
 
   const steps = [
     {
@@ -142,90 +152,95 @@ export function OnboardingFlow({ onComplete, onBack }: OnboardingFlowProps) {
   const CurrentStepComponent = steps[currentStep].component
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="container mx-auto px-6 py-12">
-        <div className="max-w-4xl mx-auto">
-          {/* Progress Header */}
-          <div className="text-center mb-12">
-            <h1 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-6 tracking-tight">
-              PORTFOLIO SETUP
-            </h1>
-            <p className="text-xl text-gray-600 mb-8">
-              Let's create your personalized stock portfolio
-            </p>
-            <div className="flex items-center justify-center space-x-3 mb-6">
-              {steps.map((_, index) => (
-                <div
-                  key={index}
-                  className={`w-4 h-4 rounded-full transition-all duration-300 ${
-                    index <= currentStep ? "bg-gray-900" : "bg-gray-300"
-                  }`}
-                />
-              ))}
-            </div>
-            <Progress value={((currentStep + 1) / steps.length) * 100} className="w-full max-w-md mx-auto" />
-            <p className="text-sm text-gray-500 mt-3 uppercase tracking-wide">
-              Step {currentStep + 1} of {steps.length}
-            </p>
-          </div>
-
-          {/* Step Content */}
-          <Card className="minimal-card card-shadow mb-8">
-            <CardHeader className="pb-6">
-              <CardTitle className="flex items-center text-2xl">
-                <span className="bg-gray-900 text-white rounded-full w-12 h-12 flex items-center justify-center text-lg font-bold mr-4">
-                  {currentStep + 1}
-                </span>
-                {steps[currentStep].title}
-              </CardTitle>
-              <CardDescription className="text-lg text-gray-600 ml-16">
-                {steps[currentStep].description}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <CurrentStepComponent
-                formData={formData}
-                setFormData={setFormData}
-                connected={connected}
-                publicKey={publicKey}
-                isAuthenticated={isAuthenticated}
-                calculatePortfolioAllocation={calculatePortfolioAllocation}
-                getPortfolioQuotes={getPortfolioQuotes}
-                createPortfolio={createPortfolio}
-                jupiterLoading={isSwapLoading}
+    <div className="bg-white">
+      <div className="max-w-5xl mx-auto px-4 py-6">
+        {/* Progress Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 tracking-tight">
+            PORTFOLIO SETUP
+          </h1>
+          <p className="text-lg text-gray-600 mb-6">
+            Let's create your personalized stock portfolio
+          </p>
+          <div className="flex items-center justify-center space-x-2 mb-4">
+            {steps.map((_, index) => (
+              <div
+                key={index}
+                className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                  index <= currentStep ? "bg-gray-900" : "bg-gray-300"
+                }`}
               />
-            </CardContent>
-          </Card>
-
-          {/* Navigation */}
-          <div className="flex justify-between">
-            <Button
-              variant="outline"
-              onClick={handleBack}
-              className="flex items-center px-8 py-3 text-base"
-              disabled={isCreating}
-            >
-              <ArrowLeft className="mr-2 h-5 w-5" />
-              Back
-            </Button>
-            <Button
-              onClick={handleNext}
-              disabled={!canProceed() || isCreating || isSwapLoading}
-              className="flex items-center px-8 py-3 text-base bg-gray-900 hover:bg-gray-800"
-            >
-              {isCreating ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Creating Portfolio...
-                </>
-              ) : (
-                <>
-                  {currentStep === steps.length - 1 ? "Complete Setup" : "Next"}
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </>
-              )}
-            </Button>
+            ))}
           </div>
+          <Progress value={((currentStep + 1) / steps.length) * 100} className="w-full max-w-sm mx-auto mb-2" />
+          <p className="text-xs text-gray-500 uppercase tracking-wide">
+            Step {currentStep + 1} of {steps.length}
+          </p>
+        </div>
+
+        {/* Step Content */}
+        <Card className="minimal-card card-shadow mb-6">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center text-xl">
+              <span className="bg-gray-900 text-white rounded-full w-10 h-10 flex items-center justify-center text-sm font-bold mr-3">
+                {currentStep + 1}
+              </span>
+              {steps[currentStep].title}
+            </CardTitle>
+            <CardDescription className="text-base text-gray-600 ml-13">
+              {steps[currentStep].description}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <CurrentStepComponent
+              formData={formData}
+              setFormData={setFormData}
+              connected={connected}
+              publicKey={publicKey}
+              isAuthenticated={isAuthenticated}
+              calculatePortfolioAllocation={calculatePortfolioAllocation}
+              calculatePortfolioAllocationWithPrices={calculatePortfolioAllocationWithPrices}
+              getPortfolioQuotes={getPortfolioQuotes}
+              buyXStock={buyXStock}
+              jupiterLoading={isSwapLoading || jupiterLoading}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Navigation */}
+        <div className="flex justify-between items-center">
+          <Button
+            variant="outline"
+            onClick={handleBack}
+            disabled={isCreating}
+            className="flex items-center"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            {currentStep === 0 ? "Back to Dashboard" : "Previous"}
+          </Button>
+
+          <Button
+            onClick={handleNext}
+            disabled={!canProceed() || isCreating}
+            className="flex items-center btn-primary"
+          >
+            {isCreating ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Creating...
+              </>
+            ) : currentStep === steps.length - 1 ? (
+              <>
+                Complete Setup
+                <CheckCircle className="h-4 w-4 ml-2" />
+              </>
+            ) : (
+              <>
+                Next Step
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </>
+            )}
+          </Button>
         </div>
       </div>
     </div>
@@ -393,33 +408,41 @@ function InvestmentStep({ formData, setFormData }: any) {
   )
 }
 
-function PortfolioPreviewStep({ formData, calculatePortfolioAllocation, getPortfolioQuotes, jupiterLoading }: any) {
+function PortfolioPreviewStep({ formData, calculatePortfolioAllocationWithPrices, jupiterLoading }: any) {
   const [allocation, setAllocation] = useState<any[]>([]);
-  const [quotes, setQuotes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchAllocationAndQuotes = async () => {
+    const fetchAllocation = async () => {
       try {
-        const allocationResult = calculatePortfolioAllocation(formData.riskTolerance, formData.initialInvestment);
+        setLoading(true);
+        console.log('[PREVIEW] Fetching portfolio allocation with prices...');
+        
+        const allocationResult = await calculatePortfolioAllocationWithPrices(
+          formData.riskTolerance, 
+          formData.initialInvestment
+        );
+        
         setAllocation(allocationResult);
-
-        const quotesResult = await getPortfolioQuotes(allocationResult);
-        setQuotes(quotesResult);
+        console.log('[PREVIEW] Portfolio allocation loaded:', allocationResult);
       } catch (err) {
-        setError('Failed to fetch portfolio allocation or quotes.');
-        console.error(err);
+        console.error('[PREVIEW] Error:', err);
+        setError('Failed to fetch portfolio allocation.');
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchAllocationAndQuotes();
-  }, [calculatePortfolioAllocation, getPortfolioQuotes, formData.riskTolerance, formData.initialInvestment]);
+    fetchAllocation();
+  }, [calculatePortfolioAllocationWithPrices, formData.riskTolerance, formData.initialInvestment]);
 
-  if (jupiterLoading) {
+  if (loading || jupiterLoading) {
     return (
       <div className="text-center py-12">
         <Loader2 className="h-12 w-12 text-gray-600 animate-spin mx-auto" />
         <p className="text-lg text-gray-600 mt-4">Calculating portfolio allocation...</p>
+        <p className="text-sm text-gray-500 mt-2">Fetching current prices...</p>
       </div>
     );
   }
@@ -428,6 +451,12 @@ function PortfolioPreviewStep({ formData, calculatePortfolioAllocation, getPortf
     return (
       <div className="text-center py-12 text-red-600">
         <p>{error}</p>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="mt-4 px-4 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -441,64 +470,204 @@ function PortfolioPreviewStep({ formData, calculatePortfolioAllocation, getPortf
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {/* Header */}
       <div className="text-center">
-        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <PieChart className="h-8 w-8 text-gray-600" />
+        <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+          <PieChartIcon className="h-6 w-6 text-gray-600" />
         </div>
-        <h3 className="text-2xl font-bold mb-2">Portfolio Preview</h3>
-        <p className="text-gray-600">
+        <h3 className="text-xl font-bold mb-2">Portfolio Preview</h3>
+        <p className="text-gray-600 text-sm">
           Review your portfolio allocation based on risk level {formData.riskTolerance}
         </p>
-        
-        {/* Test xStock availability button */}
-        <div className="mt-4">
-          <Button
-            onClick={async () => {
-              // This will be available once we pass the test function down
-            }}
-            variant="outline"
-            size="sm"
-            className="text-xs"
-          >
-            Test xStock Availability
-          </Button>
-        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {allocation.map((item: any, index: number) => (
-          <div key={index} className="bg-gray-50 rounded-lg p-6">
-            <div className="flex justify-between items-start mb-4">
-              <h4 className="font-bold text-lg">{item.symbol}</h4>
-              <Badge className="bg-gray-200 text-gray-900">{item.allocation}%</Badge>
+      {/* Portfolio Overview Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <Card className="minimal-card text-center">
+          <CardContent className="p-3">
+            <div className="text-xl font-bold text-gray-900">${formData.initialInvestment}</div>
+            <div className="text-xs text-gray-600 uppercase tracking-wide">Total Investment</div>
+          </CardContent>
+        </Card>
+        <Card className="minimal-card text-center">
+          <CardContent className="p-3">
+            <div className="text-xl font-bold text-gray-900">{formData.riskTolerance}/10</div>
+            <div className="text-xs text-gray-600 uppercase tracking-wide">Risk Level</div>
+          </CardContent>
+        </Card>
+        <Card className="minimal-card text-center">
+          <CardContent className="p-3">
+            <div className="text-xl font-bold text-gray-900">{allocation.length}</div>
+            <div className="text-xs text-gray-600 uppercase tracking-wide">Positions</div>
+          </CardContent>
+        </Card>
+        <Card className="minimal-card text-center">
+          <CardContent className="p-3">
+            <div className="text-xl font-bold text-green-700">
+              {allocation.reduce((sum, item) => sum + item.allocation, 0).toFixed(0)}%
             </div>
-            <div className="space-y-2 text-sm text-gray-600">
-              <div className="flex justify-between">
-                <span>USDC Amount:</span>
-                <span className="font-medium">${item.usdcAmount.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Est. Tokens:</span>
-                <span className="font-medium">{item.estimatedTokens || 'Loading...'}</span>
-              </div>
-            </div>
-          </div>
-        ))}
+            <div className="text-xs text-gray-600 uppercase tracking-wide">Allocated</div>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+      {/* Main Content Grid */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* Allocation Chart */}
+        <Card className="minimal-card">
+          <CardHeader className="border-b border-gray-200 pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <PieChartIcon className="h-4 w-4 text-gray-600" />
+              PORTFOLIO ALLOCATION
+            </CardTitle>
+            <CardDescription className="text-sm">Visual breakdown of your investment distribution</CardDescription>
+          </CardHeader>
+          <CardContent className="p-4">
+            <div className="h-48 mb-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie 
+                    data={allocation.map((item, index) => ({
+                      name: item.symbol,
+                      value: item.allocation,
+                      amount: item.usdcAmount,
+                      color: `hsl(${(index * 137.508 + 200) % 360}, 45%, 45%)`
+                    }))}
+                    cx="50%" 
+                    cy="50%" 
+                    outerRadius={60} 
+                    dataKey="value"
+                  >
+                    {allocation.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={`hsl(${(index * 137.508 + 200) % 360}, 45%, 45%)`} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value: any, name: any, props: any) => [
+                    `${Number(value).toFixed(1)}% ($${props.payload.amount.toFixed(0)})`, 
+                    name
+                  ]} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            
+            {/* Legend */}
+            <div className="space-y-1.5">
+              {allocation.map((item, index) => (
+                <div key={index} className="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0">
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-3 h-3 rounded" 
+                      style={{ backgroundColor: `hsl(${(index * 137.508 + 200) % 360}, 45%, 45%)` }}
+                    />
+                    <span className="font-semibold text-sm">{item.symbol}</span>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-semibold text-sm">{item.allocation}%</div>
+                    <div className="text-xs text-gray-500">${item.usdcAmount.toFixed(0)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Detailed Holdings */}
+        <Card className="minimal-card">
+          <CardHeader className="border-b border-gray-200 pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <BarChart3 className="h-4 w-4 text-gray-600" />
+              POSITION DETAILS
+            </CardTitle>
+            <CardDescription className="text-sm">Estimated tokens and current pricing</CardDescription>
+          </CardHeader>
+          <CardContent className="p-4">
+            <div className="space-y-3">
+              {allocation.map((item: any, index: number) => (
+                <div key={index} className="bg-gray-50 rounded-lg p-3">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="w-2.5 h-2.5 rounded-full" 
+                        style={{ backgroundColor: `hsl(${(index * 137.508 + 200) % 360}, 45%, 45%)` }}
+                      />
+                      <h4 className="font-bold text-base">{item.symbol}</h4>
+                    </div>
+                    <Badge className="bg-gray-200 text-gray-900 font-semibold text-xs">
+                      {item.allocation}%
+                    </Badge>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <div className="text-gray-500 text-xs uppercase tracking-wide mb-1">Investment</div>
+                      <div className="font-semibold text-sm">${item.usdcAmount.toFixed(0)}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500 text-xs uppercase tracking-wide mb-1">Current Price</div>
+                      <div className="font-semibold text-sm">
+                        {item.currentPrice > 0 ? `$${item.currentPrice.toFixed(2)}` : 'Loading...'}
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <div className="text-gray-500 text-xs uppercase tracking-wide mb-1">Estimated Tokens</div>
+                      <div className="font-semibold text-sm">
+                        {item.estimatedTokens > 0 ? item.estimatedTokens.toFixed(4) : 'Calculating...'}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Progress bar showing allocation */}
+                  <div className="mt-2">
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div 
+                        className="h-1.5 rounded-full transition-all duration-300" 
+                        style={{ 
+                          width: `${item.allocation}%`,
+                          backgroundColor: `hsl(${(index * 137.508 + 200) % 360}, 45%, 45%)`
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Portfolio Summary */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
-          <div className="w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-            <span className="text-blue-800 text-sm font-bold">i</span>
+          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <TrendingUp className="h-5 w-5 text-blue-600" />
           </div>
-          <div>
-            <p className="text-blue-800 font-medium mb-1">Portfolio Summary</p>
-            <p className="text-blue-700 text-sm">
-              Total Investment: <strong>${formData.initialInvestment} USDC</strong><br/>
-              Risk Level: <strong>{formData.riskTolerance}/10</strong><br/>
-              Stocks: <strong>{allocation.length} different companies</strong>
-            </p>
+          <div className="flex-1">
+            <h4 className="text-blue-900 font-semibold text-base mb-2">Portfolio Summary</h4>
+            <div className="grid md:grid-cols-3 gap-3 text-sm">
+              <div>
+                <div className="text-blue-700 font-medium">Total Investment</div>
+                <div className="text-blue-900 text-base font-bold">${formData.initialInvestment} USDC</div>
+              </div>
+              <div>
+                <div className="text-blue-700 font-medium">Risk Profile</div>
+                <div className="text-blue-900 text-base font-bold">
+                  {formData.riskTolerance <= 3 ? 'Conservative' : 
+                   formData.riskTolerance <= 6 ? 'Moderate' : 
+                   formData.riskTolerance <= 8 ? 'Aggressive' : 'Very Aggressive'}
+                </div>
+              </div>
+              <div>
+                <div className="text-blue-700 font-medium">Diversification</div>
+                <div className="text-blue-900 text-base font-bold">{allocation.length} Stocks</div>
+              </div>
+            </div>
+            <div className="mt-2 pt-2 border-t border-blue-200">
+              <div className="text-blue-700 text-xs">
+                This allocation is designed for your risk level with focus on 
+                <strong> {allocation[0]?.symbol}</strong> ({allocation[0]?.allocation}% allocation) as the primary holding.
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -551,98 +720,319 @@ function PortfolioSetupStep({ formData, setFormData }: any) {
   )
 }
 
-function ExecuteTradesStep({ formData, connected, publicKey, createPortfolio, jupiterLoading, calculatePortfolioAllocation }: any) {
+function ExecuteTradesStep({ formData, connected, publicKey, calculatePortfolioAllocation, buyXStock, jupiterLoading }: any) {
   const [isExecuting, setIsExecuting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [status, setStatus] = useState<{
+    type: 'idle' | 'progress' | 'success' | 'error';
+    title: string;
+    message: string;
+    details?: string[];
+  }>({
+    type: 'idle',
+    title: 'Ready to Create Portfolio',
+    message: 'Click the button below to execute your portfolio creation using real Jupiter swaps.'
+  });
 
   const handleExecuteTrades = async () => {
     setIsExecuting(true);
-    setError(null);
-    setSuccess(null);
+    setStatus({
+      type: 'progress',
+      title: 'Creating Portfolio...',
+      message: 'Executing Jupiter swaps for your xStock positions',
+      details: ['🔄 Initiating Jupiter swaps...']
+    });
+    
     try {
       const allocation = calculatePortfolioAllocation(formData.riskTolerance, formData.initialInvestment);
-      const result = await createPortfolio(allocation);
+      console.log('[EXECUTE] Starting portfolio creation with allocation:', allocation);
+      
+      setStatus(prev => ({
+        ...prev,
+        details: [...(prev.details || []), `📊 Processing ${allocation.length} positions...`]
+      }));
 
-      if (result.success) {
-        setSuccess('Portfolio created successfully!');
-        // Optionally, redirect to dashboard or show a success message
-      } else {
-        throw new Error(result.error || 'Failed to create portfolio');
+      let successCount = 0;
+      const results = [];
+      
+      // Execute each position using the same buyXStock as TradingModal
+      for (let i = 0; i < allocation.length; i++) {
+        const position = allocation[i];
+        const stockSymbol = position.symbol.replace('x', '') + 'x'; // Ensure correct format
+        
+        setStatus(prev => ({
+          ...prev,
+          details: [...(prev.details || []), `💰 Buying ${stockSymbol}: $${position.usdcAmount.toFixed(0)} USDC...`]
+        }));
+
+        try {
+          // Use the exact same function as TradingModal!
+          const signature = await buyXStock(stockSymbol, position.usdcAmount, undefined, 'USDC');
+          
+          if (signature) {
+            successCount++;
+            results.push({ symbol: stockSymbol, success: true, signature });
+            setStatus(prev => ({
+              ...prev,
+              details: [...(prev.details || []), `✅ ${stockSymbol} purchased successfully!`]
+            }));
+          } else {
+            throw new Error('No transaction signature returned');
+          }
+          
+          // Small delay between trades
+          if (i < allocation.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          
+        } catch (error) {
+          console.error(`Failed to buy ${stockSymbol}:`, error);
+          results.push({ 
+            symbol: stockSymbol, 
+            success: false, 
+            error: error instanceof Error ? error.message : 'Unknown error' 
+          });
+          
+          setStatus(prev => ({
+            ...prev,
+            details: [...(prev.details || []), `❌ ${stockSymbol} failed: ${error instanceof Error ? error.message : 'Unknown error'}`]
+          }));
+        }
       }
+
+      // Final status based on results
+      if (successCount === allocation.length) {
+        setStatus({
+          type: 'success',
+          title: 'Portfolio Created Successfully! 🎉',
+          message: `All ${successCount} positions have been created in your wallet.`,
+          details: [
+            `💼 ${successCount} xStock positions acquired`,
+            `💰 Total investment: $${formData.initialInvestment} USDC`,
+            `🎯 Risk level: ${formData.riskTolerance}/10`,
+            '🔗 All transactions recorded on Solana blockchain'
+          ]
+        });
+      } else if (successCount > 0) {
+        setStatus({
+          type: 'error',
+          title: 'Partial Portfolio Creation',
+          message: `${successCount}/${allocation.length} positions created successfully.`,
+          details: [
+            `✅ Successful: ${successCount} positions`,
+            `❌ Failed: ${allocation.length - successCount} positions`,
+            '⚠️ Some positions may be missing from your portfolio'
+          ]
+        });
+      } else {
+        setStatus({
+          type: 'error',
+          title: 'Portfolio Creation Failed',
+          message: 'No positions were created successfully.',
+          details: [
+            '❌ All swaps failed',
+            '💡 Check your USDC balance and network connection',
+            '🔄 Try again with a smaller investment amount'
+          ]
+        });
+      }
+      
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setError('Failed to execute trades: ' + errorMessage);
-      console.error(err);
+      console.error('[EXECUTE] Error:', err);
+      
+      setStatus({
+        type: 'error',
+        title: 'Portfolio Creation Failed',
+        message: errorMessage,
+        details: [
+          '❌ Unexpected error occurred',
+          '💡 Please try again or contact support',
+          `🐛 Error: ${errorMessage}`
+        ]
+      });
     } finally {
       setIsExecuting(false);
     }
   };
 
+  // Consolidated Status Display Component
+  const StatusDisplay = () => {
+    const getStatusStyles = () => {
+      switch (status.type) {
+        case 'progress':
+          return {
+            container: 'bg-blue-50 border-blue-200',
+            icon: 'text-blue-600',
+            title: 'text-blue-900',
+            message: 'text-blue-800'
+          };
+        case 'success':
+          return {
+            container: 'bg-green-50 border-green-200',
+            icon: 'text-green-600',
+            title: 'text-green-900',
+            message: 'text-green-800'
+          };
+        case 'error':
+          return {
+            container: 'bg-red-50 border-red-200',
+            icon: 'text-red-600',
+            title: 'text-red-900',
+            message: 'text-red-800'
+          };
+        default:
+          return {
+            container: 'bg-gray-50 border-gray-200',
+            icon: 'text-gray-600',
+            title: 'text-gray-900',
+            message: 'text-gray-700'
+          };
+      }
+    };
+
+    const styles = getStatusStyles();
+
+    return (
+      <Card className="minimal-card">
+        <CardContent className={`p-4 border rounded-lg ${styles.container}`}>
+          <div className="flex items-start gap-3">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+              status.type === 'progress' ? 'bg-blue-100' : 
+              status.type === 'success' ? 'bg-green-100' : 
+              status.type === 'error' ? 'bg-red-100' : 'bg-gray-100'
+            }`}>
+              {status.type === 'progress' ? (
+                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              ) : status.type === 'success' ? (
+                <CheckCircle className={`h-5 w-5 ${styles.icon}`} />
+              ) : status.type === 'error' ? (
+                <AlertCircle className={`h-5 w-5 ${styles.icon}`} />
+              ) : (
+                <TrendingUp className={`h-5 w-5 ${styles.icon}`} />
+              )}
+            </div>
+            
+            <div className="flex-1">
+              <h4 className={`font-semibold text-base mb-1 ${styles.title}`}>{status.title}</h4>
+              <p className={`text-sm mb-2 ${styles.message}`}>{status.message}</p>
+              
+              {status.details && status.details.length > 0 && (
+                <div className="space-y-1">
+                  {status.details.map((detail, index) => (
+                    <div key={index} className={`text-xs ${styles.message}`}>
+                      {detail}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="text-center">
-        <h3 className="text-lg font-semibold mb-2">Execute Trades</h3>
-        <p className="text-gray-600">
-          Create your portfolio with the settings you've chosen.
+        <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+          <CheckCircle className="h-6 w-6 text-green-600" />
+        </div>
+        <h3 className="text-xl font-bold mb-2">Execute Portfolio Creation</h3>
+        <p className="text-gray-600 text-sm">
+          Create your portfolio using the same proven Jupiter system as individual trades.
         </p>
       </div>
 
-      {/* Demo Mode Notice */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      {/* Portfolio Summary */}
+      <Card className="minimal-card">
+        <CardHeader className="border-b border-gray-200 pb-3">
+          <CardTitle className="text-base">Portfolio Summary</CardTitle>
+          <CardDescription className="text-sm">Review your final allocation before execution</CardDescription>
+        </CardHeader>
+        <CardContent className="p-4">
+          <div className="grid md:grid-cols-3 gap-4 text-center">
+            <div>
+              <div className="text-xl font-bold text-gray-900">${formData.initialInvestment}</div>
+              <div className="text-xs text-gray-600">Total Investment</div>
+            </div>
+            <div>
+              <div className="text-xl font-bold text-gray-900">{formData.riskTolerance}/10</div>
+              <div className="text-xs text-gray-600">Risk Level</div>
+            </div>
+            <div>
+              <div className="text-xl font-bold text-gray-900">
+                {calculatePortfolioAllocation(formData.riskTolerance, formData.initialInvestment).length}
+              </div>
+              <div className="text-xs text-gray-600">xStock Positions</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Jupiter Trading Notice */}
+      <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
-          <div className="w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-            <span className="text-blue-800 text-sm font-bold">ℹ</span>
+          <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <TrendingUp className="h-5 w-5 text-green-600" />
           </div>
           <div>
-            <p className="text-blue-800 font-medium mb-1">Demo Mode</p>
-            <p className="text-blue-700 text-sm">
-              This demo uses <strong>mock portfolio creation</strong> since real xStock tokens from Backed Finance 
-              may not be available on Jupiter DEX yet. In production, this would execute actual swaps to purchase 
-              tokenized stocks.
+            <p className="text-green-900 font-semibold mb-2 text-sm">Same Trading Engine as Markets</p>
+            <p className="text-green-800 text-xs mb-2">
+              This uses the <strong>identical buyXStock() function</strong> as individual trades on the Markets page. 
+              Each position will be purchased separately using proven Jupiter swaps.
             </p>
+            <div className="text-green-700 text-xs space-y-1">
+              <div>• Exact same code path as Markets → TradingModal</div>
+              <div>• Each xStock purchased individually for reliability</div>
+              <div>• No simulation issues - direct API integration</div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="flex justify-center">
+      {/* Wallet Connection Check */}
+      {!connected || !publicKey ? (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 bg-red-200 rounded-full flex items-center justify-center">
+              <span className="text-red-800 text-xs font-bold">!</span>
+            </div>
+            <p className="text-red-800 font-medium text-sm">
+              Wallet not connected. Please connect your Solana wallet to proceed.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Consolidated Status Display */}
+      <StatusDisplay />
+
+      {/* Execute Button */}
+      <div className="flex justify-center pt-2">
         <Button
           onClick={handleExecuteTrades}
           disabled={!connected || !publicKey || isExecuting || jupiterLoading}
-          className="flex items-center px-8 py-3 text-base bg-green-600 hover:bg-green-700"
+          className="flex items-center px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400"
         >
           {isExecuting ? (
             <>
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Creating Portfolio...
             </>
           ) : (
             <>
-              <CheckCircle className="mr-2 h-5 w-5" />
-              Create Demo Portfolio
+              <CheckCircle className="mr-2 h-4 w-4" />
+              Execute Portfolio Creation
             </>
           )}
         </Button>
       </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
-          <p>{error}</p>
-        </div>
-      )}
-
-      {success && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-800">
-          <p>{success}</p>
-        </div>
-      )}
-
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-        <p className="text-amber-800 text-sm">
-          <strong>Note:</strong> This is a demonstration of the portfolio creation flow. 
-          In production, you would need sufficient USDC balance and the xStock tokens would 
-          need to be available on Jupiter DEX for actual trading.
-        </p>
+      {/* Disclaimer */}
+      <div className="text-center text-xs text-gray-500 max-w-xl mx-auto">
+        By proceeding, you acknowledge that this involves real cryptocurrency transactions on the Solana blockchain. 
+        Ensure you have sufficient USDC balance and understand the risks involved.
       </div>
     </div>
   );

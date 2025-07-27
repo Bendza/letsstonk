@@ -37,7 +37,6 @@ import {
   BarChart3,
   Download
 } from "lucide-react"
-import { usePortfolio } from "@/hooks/usePortfolio"
 
 interface PortfolioProps {
   onboardingData: {
@@ -108,8 +107,98 @@ export function Portfolio({ onboardingData, onNavigate, onLogout }: PortfolioPro
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Use real portfolio data from Supabase
-  const { portfolio, loading: portfolioLoading, error: portfolioError, syncPortfolio } = usePortfolio(onboardingData.walletAddress || null)
+  // Use mock portfolio data (no Supabase dependency)
+  const [portfolio, setPortfolio] = useState<any>(null)
+  const [portfolioLoading, setPortfolioLoading] = useState(true)
+  const [portfolioError, setPortfolioError] = useState<string | null>(null)
+
+  // Create mock portfolio data
+  useEffect(() => {
+    const createMockPortfolio = () => {
+      const mockPositions = [
+        {
+          symbol: 'AAPLx',
+          amount: 2.5,
+          average_price: 180.00,
+          current_price: 185.50,
+          value: 463.75,
+          pnl: 13.75,
+          pnl_percentage: 3.06,
+          current_percentage: 30.0
+        },
+        {
+          symbol: 'TSLAx',
+          amount: 1.2,
+          average_price: 240.00,
+          current_price: 245.80,
+          value: 294.96,
+          pnl: 6.96,
+          pnl_percentage: 2.42,
+          current_percentage: 19.1
+        },
+        {
+          symbol: 'GOOGLx',
+          amount: 1.8,
+          average_price: 150.00,
+          current_price: 158.30,
+          value: 284.94,
+          pnl: 14.94,
+          pnl_percentage: 5.53,
+          current_percentage: 18.4
+        },
+        {
+          symbol: 'AMZNx',
+          amount: 1.5,
+          average_price: 140.00,
+          current_price: 145.20,
+          value: 217.80,
+          pnl: 7.80,
+          pnl_percentage: 3.71,
+          current_percentage: 14.1
+        },
+        {
+          symbol: 'MSFTx',
+          amount: 0.8,
+          average_price: 320.00,
+          current_price: 335.60,
+          value: 268.48,
+          pnl: 12.48,
+          pnl_percentage: 4.88,
+          current_percentage: 17.4
+        }
+      ]
+
+      const totalValue = mockPositions.reduce((sum, pos) => sum + pos.value, 0)
+      const totalPnl = mockPositions.reduce((sum, pos) => sum + pos.pnl, 0)
+      const pnlPercentage = (totalPnl / (totalValue - totalPnl)) * 100
+
+      return {
+        id: 'mock-portfolio',
+        user_id: 'mock-user',
+        wallet_address: onboardingData.walletAddress,
+        name: onboardingData.portfolioName,
+        risk_tolerance: onboardingData.riskTolerance,
+        initial_investment: onboardingData.initialInvestment,
+        total_value: totalValue,
+        current_pnl: totalPnl,
+        pnl_percentage: pnlPercentage,
+        positions: mockPositions,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    }
+
+    setTimeout(() => {
+      setPortfolio(createMockPortfolio())
+      setPortfolioLoading(false)
+    }, 1000) // Simulate loading
+  }, [onboardingData])
+
+  const syncPortfolio = async () => {
+    // Mock sync function
+    return Promise.resolve()
+  }
   
   // Set error state from portfolio hook
   useEffect(() => {
