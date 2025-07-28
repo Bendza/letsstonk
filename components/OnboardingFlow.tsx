@@ -838,6 +838,126 @@ function ExecuteTradesStep({ formData, connected, publicKey, calculatePortfolioA
     message: 'Click the button below to execute your portfolio creation using real Jupiter swaps.'
   });
 
+  // Create portfolio and positions in Supabase with actual trade results
+  const createPortfolioInDatabase = async (
+    tradeResults: Array<{symbol: string, success: boolean, signature?: string, error?: string, tokensReceived?: number, solSpent?: number, pricePerToken?: number, actualValue?: number}>, 
+    allocation: any[]
+  ) => {
+    if (!user?.id || !publicKey) {
+      throw new Error('User or wallet not available');
+    }
+
+    // Import supabase here to avoid dependency issues
+    const { supabase } = await import('@/lib/supabase');
+    
+    console.log('[DB] Creating portfolio record with trade results:', tradeResults);
+
+    // Calculate actual total value from successful trades
+    const actualTotalValue = tradeResults
+      .filter(result => result.success && result.actualValue)
+      .reduce((sum, result) => sum + (result.actualValue || 0), 0);
+
+    // 1. Create portfolio record with actual values
+    const { data: portfolioData, error: portfolioError } = await supabase
+      .from('portfolios')
+      .insert({
+        user_id: user.id,
+        wallet_address: publicKey.toBase58(),
+        risk_level: formData.riskTolerance,
+        initial_investment: formData.initialInvestment,
+        total_value: actualTotalValue, // Use actual value from trades
+        is_active: true
+      })
+      .select()
+      .single();
+
+    if (portfolioError) {
+      console.error('[DB] Portfolio creation error:', portfolioError);
+      throw new Error(`Failed to create portfolio: ${portfolioError.message}`);
+    }
+
+    console.log('[DB] Portfolio created with actual value:', actualTotalValue);
+    const portfolioId = portfolioData.id;
+
+    // 2. Create position records for successful trades with actual data
+    const successfulTrades = tradeResults.filter(result => result.success);
+    const positionsToInsert = [];
+
+    for (const trade of successfulTrades) {
+      if (!trade.tokensReceived || !trade.pricePerToken) continue;
+      
+      const tokenAddress = getTokenAddress(trade.symbol);
+      const actualValueUSD = trade.actualValue || 0;
+      const targetPercentage = (actualValueUSD / actualTotalValue) * 100; // Calculate actual percentage
+      
+      positionsToInsert.push({
+        portfolio_id: portfolioId,
+        symbol: trade.symbol,
+        token_address: tokenAddress,
+        amount: trade.tokensReceived, // Actual tokens received
+        target_percentage: targetPercentage, // Actual percentage based on real value
+        current_percentage: targetPercentage,
+        average_price: trade.pricePerToken, // Actual price paid per token
+        current_price: trade.pricePerToken, // Use same as average for now
+        value: actualValueUSD // Actual USD value
+      });
+    }
+
+    if (positionsToInsert.length > 0) {
+      const { error: positionsError } = await supabase
+        .from('positions')
+        .insert(positionsToInsert);
+
+      if (positionsError) {
+        console.error('[DB] Positions creation error:', positionsError);
+        throw new Error(`Failed to create positions: ${positionsError.message}`);
+      }
+
+      console.log('[DB] Created', positionsToInsert.length, 'position records with actual values');
+    }
+
+    // 3. Create transaction records for all trades with actual amounts
+    const transactionsToInsert = tradeResults.map(result => ({
+      portfolio_id: portfolioId,
+      wallet_address: publicKey.toBase58(),
+      transaction_signature: result.signature || 'failed',
+      transaction_type: 'buy' as const,
+      input_token: 'So11111111111111111111111111111111111111112', // SOL address
+      output_token: getTokenAddress(result.symbol),
+      input_amount: result.solSpent || 0, // Actual SOL spent
+      output_amount: result.tokensReceived || 0, // Actual tokens received
+      status: result.success ? 'confirmed' as const : 'failed' as const
+    }));
+
+    const { error: transactionsError } = await supabase
+      .from('transactions')
+      .insert(transactionsToInsert);
+
+    if (transactionsError) {
+      console.error('[DB] Transactions creation error:', transactionsError);
+      // Don't throw here - portfolio is still created successfully
+    } else {
+      console.log('[DB] Created', transactionsToInsert.length, 'transaction records with actual amounts');
+    }
+
+    return portfolioData;
+  };
+
+  // Helper function to get token address from symbol
+  const getTokenAddress = (symbol: string): string => {
+    const addressMap: Record<string, string> = {
+      'AAPLx': 'XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp',
+      'TSLAx': 'XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB',
+      'GOOGLx': 'XsCPL9dNWBMvFtTmwcCA5v3xWPSMEBCszbQdiLLq6aN',
+      'AMZNx': 'Xs3eBt7uRfJX8QUs4suhyU8p2M6DoUDrJyWBa8LLZsg',
+      'PGx': 'XsYdjDjNUygZ7yGKfQaB6TxLh2gC6RRjzLtLAGJrhzV',
+      'UNHx': 'XszvaiXGPwvk2nwb3o9C1CX4K6zH8sez11E6uyup6fe',
+      'Vx': 'XsqgsbXwWogGJsNcVZ3TyVouy2MbTkfCFhCGGcQZ2p',
+      'WMTx': 'Xs151QeqTCiuKtinzfRATnUESM2xTU6V9Wy8Vy538ci'
+    };
+    return addressMap[symbol] || '';
+  };
+
   const handleExecuteTrades = async () => {
     setIsExecuting(true);
     setStatus({
@@ -877,7 +997,7 @@ function ExecuteTradesStep({ formData, connected, publicKey, calculatePortfolioA
       }));
 
       let successCount = 0;
-      const results = [];
+      const results: Array<{symbol: string, success: boolean, signature?: string, error?: string, tokensReceived?: number, solSpent?: number, pricePerToken?: number, actualValue?: number}> = [];
       
       // Execute each position using the same buyXStock as TradingModal
       for (let i = 0; i < allocation.length; i++) {
@@ -896,14 +1016,29 @@ function ExecuteTradesStep({ formData, connected, publicKey, calculatePortfolioA
         try {
           console.log(`[PORTFOLIO] Buying ${stockSymbol} with ${solAmount.toFixed(4)} SOL (was ${position.usdcAmount} USDC)`);
           
-          const signature = await buyXStock(stockSymbol, solAmount, undefined, 'SOL');
+          const swapResult = await buyXStock(stockSymbol, solAmount, undefined, 'SOL');
           
-          if (signature) {
+          if (swapResult && swapResult.signature) {
             successCount++;
-            results.push({ symbol: stockSymbol, success: true, signature });
+            
+            // Calculate actual tokens received and price paid
+            const tokensReceived = parseFloat(swapResult.outputAmount) / Math.pow(10, 6); // xStocks have 6 decimals
+            const solSpent = parseFloat(swapResult.inputAmount) / Math.pow(10, 9); // SOL has 9 decimals
+            const pricePerToken = solSpent / tokensReceived * 200; // Convert SOL to USD (approximate)
+            
+            results.push({ 
+              symbol: stockSymbol, 
+              success: true, 
+              signature: swapResult.signature,
+              tokensReceived: tokensReceived,
+              solSpent: solSpent,
+              pricePerToken: pricePerToken,
+              actualValue: tokensReceived * pricePerToken
+            });
+            
             setStatus(prev => ({
               ...prev,
-              details: [...(prev.details || []), `✅ ${stockSymbol} purchased successfully!`]
+              details: [...(prev.details || []), `✅ ${stockSymbol}: ${tokensReceived.toFixed(6)} tokens @ $${pricePerToken.toFixed(2)} each`]
             }));
           } else {
             throw new Error('No transaction signature returned');
@@ -933,44 +1068,61 @@ function ExecuteTradesStep({ formData, connected, publicKey, calculatePortfolioA
         }
       }
 
-      // Final status based on results
-      if (successCount === allocation.length) {
+      // Final status based on results - treat partial success as success
+      if (successCount > 0) {
+        const isPartialSuccess = successCount < allocation.length;
+        
+        // Calculate actual total value from successful trades
+        const actualTotalValue = results
+          .filter(result => result.success && result.actualValue)
+          .reduce((sum, result) => sum + (result.actualValue || 0), 0);
+        
         setStatus({
           type: 'success',
-          title: 'Portfolio Created Successfully! 🎉',
-          message: `All ${successCount} positions have been created in your wallet.`,
+          title: isPartialSuccess 
+            ? `Portfolio Created with ${successCount}/${allocation.length} Positions! 🎉` 
+            : 'Portfolio Created Successfully! 🎉',
+          message: isPartialSuccess
+            ? `${successCount} positions were created successfully. You can add the remaining positions later from the Markets page.`
+            : `All ${successCount} positions have been created in your wallet.`,
           details: [
             `💼 ${successCount} xStock positions acquired`,
-            `💰 Total investment: $${formData.initialInvestment} ≈ ${(formData.initialInvestment / 200).toFixed(4)} SOL`,
+            `💰 Actual portfolio value: $${actualTotalValue.toFixed(2)} (planned: $${formData.initialInvestment})`,
             `🎯 Risk level: ${formData.riskTolerance}/10`,
-            '🔗 All transactions recorded on Solana blockchain'
+            '🔗 All transactions recorded on Solana blockchain',
+            isPartialSuccess 
+              ? `⚠️ ${allocation.length - successCount} positions failed - you can purchase them manually later`
+              : '✅ All positions created successfully',
+            '📊 Creating portfolio records in database...'
           ]
         });
         
-        // Complete the onboarding flow after showing success for 3 seconds
+        // Complete the onboarding flow for ANY successful positions
         setTimeout(() => {
           onComplete(formData);
-        }, 3000);
-      } else if (successCount > 0) {
-        setStatus({
-          type: 'error',
-          title: 'Partial Portfolio Creation',
-          message: `${successCount}/${allocation.length} positions created successfully.`,
-          details: [
-            `✅ Successful: ${successCount} positions`,
-            `❌ Failed: ${allocation.length - successCount} positions`,
-            '⚠️ Some positions may be missing from your portfolio'
-          ]
-        });
+        }, 2000);
+        
+        // Create portfolio and positions in Supabase with actual trade data (in background)
+        setTimeout(async () => {
+          try {
+            await createPortfolioInDatabase(results, allocation);
+            console.log('[DB] Portfolio records created successfully in background');
+          } catch (dbError) {
+            console.error('Background database error:', dbError);
+          }
+        }, 500);
+        
       } else {
+        // Only show complete failure if NO positions were created
         setStatus({
           type: 'error',
           title: 'Portfolio Creation Failed',
           message: 'No positions were created successfully.',
           details: [
             '❌ All swaps failed',
-            '💡 Check your USDC balance and network connection',
-            '🔄 Try again with a smaller investment amount'
+            '💡 Check your SOL balance and network connection',
+            '🔄 Try again with a smaller investment amount',
+            '💰 Make sure you have at least 0.05 SOL for transaction fees'
           ]
         });
       }

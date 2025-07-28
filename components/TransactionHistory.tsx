@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,6 +29,20 @@ export function TransactionHistory() {
   
   const { publicKey } = useWallet()
   const { transactions, loading, error, refetch } = useTransactions(publicKey?.toString() || null)
+
+  // Debug: Log transaction data
+  useEffect(() => {
+    console.log('[TRANSACTION HISTORY] Transactions loaded:', {
+      count: transactions.length,
+      transactions: transactions.map(tx => ({
+        signature: tx.transaction_signature,
+        type: tx.transaction_type,
+        portfolio_id: tx.portfolio_id,
+        status: tx.status,
+        created_at: tx.created_at
+      }))
+    });
+  }, [transactions]);
 
   // Filter and search transactions
   const filteredTransactions = transactions.filter(transaction => {
@@ -81,7 +95,7 @@ export function TransactionHistory() {
     }
     
     // Fallback mapping for additional tokens not in curated list
-    const fallbackTokens: Record<string, { symbol: string; name: string; emoji: string; decimals: number }> = {
+    const fallbackTokens: Record<string, { symbol: string; name: string; logoURI?: string; emoji: string; decimals: number }> = {
       'Xs8S1uUs1zvS2p7iwtsG3b6fkhpvmwz4GYU3gWAmWHZ': { symbol: 'NVDAx', name: 'NVIDIA xStock', emoji: '🎮', decimals: 6 },
       'QQQQj3HGQp3mKpJYr0FKJE5iWsJDBRBRnXmEMp1JaTE': { symbol: 'QQQx', name: 'QQQ xStock', emoji: '📊', decimals: 6 },
     }
@@ -92,12 +106,13 @@ export function TransactionHistory() {
     
     // Check if it's an xStock by address pattern
     if (address.startsWith('Xs') || address.startsWith('QQQQ')) {
-      return { symbol: 'xStock', name: 'Tokenized Stock', emoji: '📈', decimals: 6 }
+      return { symbol: 'xStock', name: 'Tokenized Stock', logoURI: undefined, emoji: '📈', decimals: 6 }
     }
     
     return { 
       symbol: `${address.slice(0, 4)}...${address.slice(-4)}`, 
       name: 'Unknown Token',
+      logoURI: undefined,
       emoji: '❓',
       decimals: 6
     }
@@ -261,13 +276,25 @@ export function TransactionHistory() {
         </Card>
         <Card className="minimal-card">
           <CardContent className="p-6 text-center">
-            <div className="text-3xl font-bold text-gray-900 mb-2">
-              {transactions.filter((tx) => tx.status === 'confirmed').length}
+            <div className="text-3xl font-bold text-blue-600 mb-2">
+              {transactions.filter((tx) => tx.portfolio_id).length}
             </div>
-            <div className="text-sm text-gray-600 uppercase tracking-wide">Confirmed</div>
+            <div className="text-sm text-gray-600 uppercase tracking-wide">Portfolio Trades</div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Database Integration Notice */}
+      <Card className="minimal-card mb-6 bg-blue-50 border-blue-200">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+            <div className="text-sm text-blue-800">
+              <strong>Real-time Transaction Tracking:</strong> All trades from portfolio creation and markets trading are automatically logged to your secure database and displayed here in real-time.
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Filters */}
       <Card className="minimal-card mb-6">
@@ -335,6 +362,7 @@ export function TransactionHistory() {
                   <tr>
                     <th>DATE & TIME</th>
                     <th>TYPE</th>
+                    <th>SOURCE</th>
                     <th>FROM</th>
                     <th>TO</th>
                     <th>AMOUNT IN</th>
@@ -368,6 +396,15 @@ export function TransactionHistory() {
                               <ArrowDownRight className="h-3 w-3 mr-1" />
                             )}
                             {transaction.transaction_type.toUpperCase()}
+                          </Badge>
+                        </td>
+                        <td>
+                          <Badge 
+                            className={`rounded-none ${
+                              transaction.portfolio_id ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-800"
+                            }`}
+                          >
+                            {transaction.portfolio_id ? "Portfolio" : "Standalone"}
                           </Badge>
                         </td>
                         <td>

@@ -100,7 +100,7 @@ export const useJupiterTrading = () => {
   const executeSwap = useCallback(async (
     quoteResponse: QuoteResponse,
     portfolioId?: string
-  ): Promise<string | null> => {
+  ): Promise<{ signature: string; inputAmount: string; outputAmount: string; inputMint: string; outputMint: string; priceImpactPct: string } | null> => {
     if (!connected || !publicKey) {
       setError('Wallet not connected');
       return null;
@@ -176,20 +176,26 @@ export const useJupiterTrading = () => {
         
         console.log('Transaction confirmed:', signature);
         
-        // Log transaction to Supabase
-        if (portfolioId) {
-          await logTransaction({
-            portfolioId,
-            signature,
-            inputMint: quoteResponse.inputMint,
-            outputMint: quoteResponse.outputMint,
-            inputAmount: quoteResponse.inAmount,
-            outputAmount: quoteResponse.outAmount,
-            type: 'buy'
-          });
-        }
+        // Log transaction to Supabase (always log, even without portfolioId)
+        await logTransaction({
+          portfolioId: portfolioId || null,
+          signature,
+          inputMint: quoteResponse.inputMint,
+          outputMint: quoteResponse.outputMint,
+          inputAmount: quoteResponse.inAmount,
+          outputAmount: quoteResponse.outAmount,
+          type: 'buy'
+        });
 
-        return signature;
+        // Return actual swap data, not just signature
+        return {
+          signature,
+          inputAmount: quoteResponse.inAmount,
+          outputAmount: quoteResponse.outAmount,
+          inputMint: quoteResponse.inputMint,
+          outputMint: quoteResponse.outputMint,
+          priceImpactPct: quoteResponse.priceImpactPct
+        };
       } catch (confirmError) {
         // Transaction might still succeed even if confirmation fails
         console.warn('Confirmation failed, but transaction may still succeed:', confirmError);
@@ -206,25 +212,31 @@ export const useJupiterTrading = () => {
               console.error('Transaction failed:', status.meta.err);
             } else if (status) {
               console.log('Transaction succeeded after manual check');
-              // Log successful transaction
-              if (portfolioId) {
-                await logTransaction({
-                  portfolioId,
-                  signature,
-                  inputMint: quoteResponse.inputMint,
-                  outputMint: quoteResponse.outputMint,
-                  inputAmount: quoteResponse.inAmount,
-                  outputAmount: quoteResponse.outAmount,
-                  type: 'buy'
-                });
-              }
+              // Log successful transaction (always log, even without portfolioId)
+              await logTransaction({
+                portfolioId: portfolioId || null,
+                signature,
+                inputMint: quoteResponse.inputMint,
+                outputMint: quoteResponse.outputMint,
+                inputAmount: quoteResponse.inAmount,
+                outputAmount: quoteResponse.outAmount,
+                type: 'buy'
+              });
             }
           } catch (statusError) {
             console.error('Failed to check transaction status:', statusError);
           }
         }, 5000); // Check after 5 seconds
         
-        return signature; // Return signature anyway, let user check manually
+        // Return swap data even if confirmation failed
+        return {
+          signature,
+          inputAmount: quoteResponse.inAmount,
+          outputAmount: quoteResponse.outAmount,
+          inputMint: quoteResponse.inputMint,
+          outputMint: quoteResponse.outputMint,
+          priceImpactPct: quoteResponse.priceImpactPct
+        };
       }
       
     } catch (err) {
@@ -250,7 +262,7 @@ export const useJupiterTrading = () => {
 
   // Log transaction to Supabase
   const logTransaction = useCallback(async (params: {
-    portfolioId: string;
+    portfolioId: string | null;
     signature: string;
     inputMint: string;
     outputMint: string;
@@ -259,10 +271,18 @@ export const useJupiterTrading = () => {
     type: 'buy' | 'sell';
   }) => {
     try {
+      console.log('[TRADING] Logging transaction to Supabase:', {
+        signature: params.signature,
+        portfolioId: params.portfolioId,
+        type: params.type,
+        inputToken: params.inputMint,
+        outputToken: params.outputMint
+      });
+
       const { error } = await supabase
         .from('transactions')
         .insert({
-          portfolio_id: params.portfolioId,
+          portfolio_id: params.portfolioId, // Can be null for standalone trades
           wallet_address: publicKey?.toString() || null,
           transaction_signature: params.signature,
           transaction_type: params.type,
@@ -274,10 +294,12 @@ export const useJupiterTrading = () => {
         });
 
       if (error) {
-        console.error('Failed to log transaction:', error);
+        console.error('[TRADING] Failed to log transaction:', error);
+      } else {
+        console.log('[TRADING] Transaction logged successfully to Supabase');
       }
     } catch (err) {
-      console.error('Error logging transaction:', err);
+      console.error('[TRADING] Error logging transaction:', err);
     }
   }, [publicKey]);
 

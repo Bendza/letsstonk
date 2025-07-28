@@ -37,6 +37,7 @@ import {
   BarChart3,
   Download
 } from "lucide-react"
+import { usePortfolio } from '@/hooks/usePortfolio'
 
 interface PortfolioProps {
   onboardingData: {
@@ -107,99 +108,24 @@ export function Portfolio({ onboardingData, onNavigate, onLogout }: PortfolioPro
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Use mock portfolio data (no Supabase dependency)
-  const [portfolio, setPortfolio] = useState<any>(null)
-  const [portfolioLoading, setPortfolioLoading] = useState(true)
-  const [portfolioError, setPortfolioError] = useState<string | null>(null)
+  // Use real portfolio data hook instead of mock data
+  const { 
+    portfolio, 
+    loading: portfolioLoading, 
+    error: portfolioError, 
+    syncPortfolio 
+  } = usePortfolio();
 
-  // Create mock portfolio data
+  // Debug: Log portfolio data when it changes
   useEffect(() => {
-    const createMockPortfolio = () => {
-      const mockPositions = [
-        {
-          symbol: 'AAPLx',
-          amount: 2.5,
-          average_price: 180.00,
-          current_price: 185.50,
-          value: 463.75,
-          pnl: 13.75,
-          pnl_percentage: 3.06,
-          current_percentage: 30.0
-        },
-        {
-          symbol: 'TSLAx',
-          amount: 1.2,
-          average_price: 240.00,
-          current_price: 245.80,
-          value: 294.96,
-          pnl: 6.96,
-          pnl_percentage: 2.42,
-          current_percentage: 19.1
-        },
-        {
-          symbol: 'GOOGLx',
-          amount: 1.8,
-          average_price: 150.00,
-          current_price: 158.30,
-          value: 284.94,
-          pnl: 14.94,
-          pnl_percentage: 5.53,
-          current_percentage: 18.4
-        },
-        {
-          symbol: 'AMZNx',
-          amount: 1.5,
-          average_price: 140.00,
-          current_price: 145.20,
-          value: 217.80,
-          pnl: 7.80,
-          pnl_percentage: 3.71,
-          current_percentage: 14.1
-        },
-        {
-          symbol: 'MSFTx',
-          amount: 0.8,
-          average_price: 320.00,
-          current_price: 335.60,
-          value: 268.48,
-          pnl: 12.48,
-          pnl_percentage: 4.88,
-          current_percentage: 17.4
-        }
-      ]
+    console.log('[PORTFOLIO COMPONENT] Portfolio data changed:', {
+      portfolio,
+      loading: portfolioLoading,
+      error: portfolioError,
+      hasPositions: portfolio?.positions?.length || 0
+    });
+  }, [portfolio, portfolioLoading, portfolioError]);
 
-      const totalValue = mockPositions.reduce((sum, pos) => sum + pos.value, 0)
-      const totalPnl = mockPositions.reduce((sum, pos) => sum + pos.pnl, 0)
-      const pnlPercentage = (totalPnl / (totalValue - totalPnl)) * 100
-
-      return {
-        id: 'mock-portfolio',
-        user_id: 'mock-user',
-        wallet_address: onboardingData.walletAddress,
-        name: onboardingData.portfolioName,
-        risk_tolerance: onboardingData.riskTolerance,
-        initial_investment: onboardingData.initialInvestment,
-        total_value: totalValue,
-        current_pnl: totalPnl,
-        pnl_percentage: pnlPercentage,
-        positions: mockPositions,
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-    }
-
-    setTimeout(() => {
-      setPortfolio(createMockPortfolio())
-      setPortfolioLoading(false)
-    }, 1000) // Simulate loading
-  }, [onboardingData])
-
-  const syncPortfolio = async () => {
-    // Mock sync function
-    return Promise.resolve()
-  }
-  
   // Set error state from portfolio hook
   useEffect(() => {
     if (portfolioError) {
@@ -265,17 +191,41 @@ export function Portfolio({ onboardingData, onNavigate, onLogout }: PortfolioPro
     )
   }
 
-  // Show empty state if no portfolio
-  if (!portfolio) {
+  // Convert database positions to display format
+  const positions = (portfolio?.positions || []).map((position: any) => ({
+    symbol: position.symbol,
+    name: position.symbol.replace("x", ""),
+    shares: position.amount || 0,
+    avgPrice: position.average_price || 0,
+    currentPrice: position.current_price || position.average_price || 0, // Fallback to avg price if current not set
+    value: position.value || 0,
+    change: position.pnl || 0,
+    changePercent: position.pnl_percentage || 0,
+    allocation: Number(position.current_percentage || position.target_percentage || 0),
+    logo: getStockLogo(position.symbol),
+  }))
+
+  // Debug: Log processed positions
+  useEffect(() => {
+    if (portfolio) {
+      console.log('[PORTFOLIO COMPONENT] Raw positions from DB:', portfolio.positions);
+      console.log('[PORTFOLIO COMPONENT] Processed positions for display:', positions);
+    }
+  }, [portfolio, positions]);
+
+  // Show empty state if no portfolio found (user hasn't created one yet)
+  if (!portfolioLoading && !portfolio) {
     return (
       <div className="w-full max-w-7xl mx-auto p-4">
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
             <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-800 mb-2">No Portfolio Found</h2>
-            <p className="text-gray-600 mb-4">No active portfolio found for your wallet.</p>
+            <p className="text-gray-600 mb-4">
+              You haven't created a portfolio yet. Complete the onboarding flow to get started.
+            </p>
             <Button onClick={() => onNavigate('dashboard')}>
-              Go to Dashboard
+              Create Portfolio
             </Button>
           </div>
         </div>
@@ -283,25 +233,23 @@ export function Portfolio({ onboardingData, onNavigate, onLogout }: PortfolioPro
     )
   }
 
-  // Calculate portfolio metrics from real data
-  const currentValue = portfolio.total_value || 0
-  const initialInvestment = portfolio.initial_investment || onboardingData.initialInvestment
-  const totalReturn = portfolio.current_pnl || 0
-  const totalReturnPercent = portfolio.pnl_percentage || 0
+  // Calculate portfolio metrics from real data (only if portfolio exists)
+  const currentValue = portfolio?.total_value || 0
+  const initialInvestment = portfolio?.initial_investment || onboardingData.initialInvestment
+  const totalReturn = portfolio?.current_pnl || 0
+  const totalReturnPercent = portfolio?.pnl_percentage || 0
 
-  // Convert database positions to display format
-  const positions = (portfolio.positions || []).map((position: any) => ({
-    symbol: position.symbol,
-    name: position.symbol.replace("x", ""),
-    shares: position.amount || 0,
-    avgPrice: position.average_price || 0,
-    currentPrice: position.current_price || 0,
-    value: position.value || 0,
-    change: position.pnl || 0,
-    changePercent: position.pnl_percentage || 0,
-    allocation: Number(position.current_percentage || 0),
-    logo: getStockLogo(position.symbol),
-  }))
+  // Debug: Log portfolio values after calculation
+  useEffect(() => {
+    if (portfolio) {
+      console.log('[PORTFOLIO COMPONENT] Portfolio values:', {
+        currentValue,
+        initialInvestment,
+        totalReturn,
+        totalReturnPercent
+      });
+    }
+  }, [portfolio, currentValue, initialInvestment, totalReturn, totalReturnPercent]);
 
   // Create pie chart data from real positions
   const pieData = positions.map((pos, index) => ({
@@ -359,13 +307,18 @@ export function Portfolio({ onboardingData, onNavigate, onLogout }: PortfolioPro
                 Last synced: {new Date(portfolio.updated_at).toLocaleString()}
               </p>
             )}
+            {portfolio && portfolio.wallet_address && (
+              <p className="text-xs text-gray-500">
+                Wallet: {portfolio.wallet_address.slice(0, 8)}...{portfolio.wallet_address.slice(-8)}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 md:gap-3">
           <div className="flex items-center gap-2 px-2 md:px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
             <Activity className="h-4 w-4 text-gray-600" />
             <span className="text-xs md:text-sm font-medium text-gray-700">
-              Risk Level: {onboardingData.riskTolerance}/10
+              Risk Level: {portfolio?.risk_level || onboardingData.riskTolerance}/10
             </span>
           </div>
           <Button 
