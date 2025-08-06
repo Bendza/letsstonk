@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { useWallet } from '@solana/wallet-adapter-react'
+// Removed Solana wallet adapter import - using Privy instead
 import { Shield, Bell, Wallet, RefreshCw, AlertTriangle, CheckCircle, Download, Trash2 } from "lucide-react"
+import { useWallets } from '@privy-io/react-auth'
 
 interface SettingsProps {
   onNavigate: (page: "landing" | "dashboard" | "markets" | "portfolio" | "analytics" | "history" | "settings") => void
@@ -20,7 +21,9 @@ interface SettingsProps {
 }
 
 export function Settings({ onNavigate, onLogout }: SettingsProps) {
-  const { connected, publicKey } = useWallet()
+  const { wallets } = useWallets()
+  const connected = wallets.length > 0
+  const publicKey = wallets[0]?.address
 
   // Portfolio Settings
   const [autoRebalance, setAutoRebalance] = useState(true)

@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { LandingPage } from "../components/LandingPage"
+import { MarketplaceLanding } from "../components/MarketplaceLanding"
 import { TradingModal } from "../components/TradingModal"
 import { DisclaimerModal } from "@/components/DisclaimerModal"
-import { useWalletAuth } from "@/hooks/useWalletAuth"
+import { usePrivyAuth } from "@/hooks/usePrivyAuth"
 
 export default function Page() {
   const [selectedStock, setSelectedStock] = useState<any>(null)
@@ -13,19 +13,12 @@ export default function Page() {
   const [showDisclaimer, setShowDisclaimer] = useState(false)
   const router = useRouter()
   
-  const { isAuthenticated, hasProfile, hasPortfolio, user } = useWalletAuth()
+  const { isAuthenticated, hasProfile, hasPortfolio, user } = usePrivyAuth()
 
-  // Auto-navigate users with existing portfolios to markets page
-  useEffect(() => {
-    if (isAuthenticated && hasProfile && hasPortfolio) {
-      console.log('🚀 User has existing portfolio, redirecting to markets')
-      router.push('/dashboard/markets')
-    }
-  }, [isAuthenticated, hasProfile, hasPortfolio, router])
+  // Users stay on landing page after login - no auto navigation
 
   const handleGetStarted = () => {
-    // Navigate directly to markets instead of showing onboarding
-    router.push('/dashboard/markets')
+    // Users stay on landing page - no navigation needed
   }
 
 
@@ -63,7 +56,7 @@ export default function Page() {
         onClose={handleCloseDisclaimer}
         onAccept={handleAcceptDisclaimer}
       />
-      <LandingPage 
+      <MarketplaceLanding 
         onNavigate={handleNavigate}
       />
       

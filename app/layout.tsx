@@ -4,30 +4,31 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { Providers } from "./providers"
 import { SidebarProvider } from "@/components/ui/sidebar"
+import { Toaster } from "sonner"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "SolStock - AI Robo-advisor - Tokenized Stock Trading on Solana",
+  title: "LetsStonk - Tokenized Stock Trading on Solana",
   description:
-    "AI-powered robo-advisor for trading real stocks as tokens on Solana blockchain. Automated portfolio management with Backed Finance xStocks.",
-  keywords: "solana, stocks, trading, defi, robo-advisor, tokenized securities, backed finance",
+    "Trade real stocks as tokens on Solana blockchain. Access S&P 500 stocks 24/7 with instant settlement and professional trading tools.",
+  keywords: "solana, stocks, trading, defi, tokenized securities, backed finance, xstocks, letsstonk",
   generator: 'v0.dev',
-  metadataBase: new URL('https://solstock.app'),
+  metadataBase: new URL('https://letsstonk.app'),
   alternates: {
     canonical: '/',
   },
   openGraph: {
-    title: "SolStock - AI Robo-advisor for Tokenized Stock Trading",
-    description: "Trade real stocks as tokens on Solana with AI-powered portfolio management",
-    url: 'https://solstock.app',
-    siteName: 'SolStock',
+    title: "LetsStonk - Tokenized Stock Trading on Solana",
+    description: "Trade real stocks as tokens on Solana. 24/7 access to S&P 500 stocks with instant settlement.",
+    url: 'https://letsstonk.app',
+    siteName: 'LetsStonk',
     images: [
       {
-        url: '/placeholder-logo.png',
+        url: '/logo-solstock.webp',
         width: 1200,
         height: 630,
-        alt: 'SolStock - Tokenized Stock Trading on Solana',
+        alt: 'LetsStonk - Tokenized Stock Trading on Solana',
       },
     ],
     locale: 'en_US',
@@ -35,9 +36,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: "SolStock - AI Robo-advisor for Tokenized Stock Trading",
-    description: "Trade real stocks as tokens on Solana with AI-powered portfolio management",
-    images: ['/placeholder-logo.png'],
+    title: "LetsStonk - Tokenized Stock Trading on Solana",
+    description: "Trade real stocks as tokens on Solana. 24/7 access to S&P 500 stocks with instant settlement.",
+    images: ['/logo-solstock.webp'],
   },
   robots: {
     index: true,
@@ -51,8 +52,8 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: '/logo-solstock.webp',
-    shortcut: '/logo-solstock.webp',
+    icon: '/image.png',
+    shortcut: '/image.png',
     apple: '/apple-touch-icon.png',
   },
 }
@@ -69,6 +70,19 @@ export default function RootLayout({
           <SidebarProvider defaultOpen={true}>
             <div className="min-h-screen w-full">{children}</div>
           </SidebarProvider>
+          <Toaster 
+            position="bottom-right" 
+            theme="dark"
+            className="toaster group"
+            toastOptions={{
+              classNames: {
+                toast: "group toast group-[.toaster]:bg-card group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
+                description: "group-[.toast]:text-muted-foreground",
+                actionButton: "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
+                cancelButton: "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
+              },
+            }}
+          />
         </Providers>
       </body>
     </html>

@@ -13,8 +13,9 @@ SolStock AI is a Solana-based robo-advisor that allows users to trade real stock
 - **React 18**: Functional components with hooks-based state management
 - **Tailwind CSS 3.4**: Utility-first styling with CSS variables and custom classes
 - **shadcn/ui**: Component system built on Radix UI primitives
-- **TanStack Query**: Data fetching, caching, and synchronization
-- **Solana Wallet Adapter**: Multi-wallet support (Phantom, Solflare, etc.)
+- **TanStack Query**: Data fetching, caching, and synchronization (5min stale time)
+- **Privy**: Wallet authentication and user management (replaced Solana Wallet Adapter)
+- **Zod**: Runtime type validation and schema definitions
 
 ### Backend & Infrastructure
 - **Supabase**: PostgreSQL database with Edge Functions and real-time subscriptions
@@ -54,7 +55,7 @@ SolStock AI is a Solana-based robo-advisor that allows users to trade real stock
 #### `/components` - React Components
 - **Layout Components**: `AppLayout.tsx`, `AppSidebar.tsx`, `Navigation.tsx`
 - **Feature Components**: `Dashboard.tsx`, `Portfolio.tsx`, `InvestForm.tsx`, `TradingModal.tsx`
-- **Provider Components**: `WalletProvider.tsx`, `MockWalletProvider.tsx` (dual system)
+- **Provider Components**: `PrivyProvider.tsx`, `PrivyWalletButton.tsx` (Privy authentication system)
 - **UI Components**: Complete shadcn/ui component library in `ui/` subdirectory
 - **Utility Components**: `ClientOnly.tsx`, `DisclaimerModal.tsx`, `LegalBanner.tsx`
 
@@ -71,7 +72,8 @@ SolStock AI is a Solana-based robo-advisor that allows users to trade real stock
 
 #### `/hooks` - Custom React Hooks
 - `usePortfolio.ts` - Portfolio data fetching and management
-- `useWalletAuth.ts` - Wallet authentication and signature verification
+- `useWalletAuth.ts` - Legacy wallet authentication (deprecated)
+- `usePrivyAuth.ts` - Privy authentication and user management
 - `useJupiterSwap.ts` - Jupiter DEX integration for swaps
 - `useJupiterTrading.ts` - Enhanced trading operations
 - `useMockSwap.ts` - Mock trading for development
@@ -96,12 +98,28 @@ SolStock AI is a Solana-based robo-advisor that allows users to trade real stock
 
 ## Development Commands
 
+### Frontend Development
 - `npm run dev` - Start development server with hot reload
 - `npm run build` - Build optimized production bundle
 - `npm run start` - Start production server
 - `npm run lint` - Run ESLint code analysis
 
-## Supabase Backend Commands
+### Important Build Configuration
+- ESLint and TypeScript errors are ignored during builds (`ignoreDuringBuilds: true`)
+- Images are unoptimized for deployment compatibility
+- No test runner configured - manual testing through UI
+
+## Important Architecture Notes
+
+### Frontend-Only Architecture
+- **Current State**: Supabase integration has been disabled/stubbed out in favor of a frontend-only approach
+- **Database Operations**: The `lib/supabase.ts` file contains stub implementations for backward compatibility
+- **Authentication**: Uses Privy exclusively for wallet authentication and user management
+- **Data Storage**: Relies on client-side state management and external APIs rather than database persistence
+
+## Supabase Backend Commands (Legacy)
+
+Note: These commands are for reference only as Supabase functionality is currently disabled.
 
 - `supabase login` - Authenticate with Supabase CLI
 - `supabase link --project-ref <ref>` - Link to Supabase project
@@ -114,7 +132,7 @@ SolStock AI is a Solana-based robo-advisor that allows users to trade real stock
 - **Composition over Inheritance**: Reusable components with prop interfaces
 - **Server/Client Components**: Proper separation for Next.js App Router
 - **shadcn/ui Pattern**: Consistent component API with Radix UI primitives
-- **Dual Provider System**: MockWalletProvider for development, WalletProvider for production
+- **Authentication System**: Privy-based wallet connection with unified user management
 
 ### State Management
 - **React Query**: Server state management with caching and synchronization
@@ -124,9 +142,9 @@ SolStock AI is a Solana-based robo-advisor that allows users to trade real stock
 
 ### Data Flow
 - **Type Safety**: End-to-end TypeScript with Zod validation schemas
-- **Database First**: Supabase schema generates TypeScript types
-- **Real-time Subscriptions**: Live updates for portfolio changes
-- **Edge Functions**: Serverless backend operations with automatic scaling
+- **Frontend-First**: Client-side state management with React Query for API data
+- **Real-time Updates**: Live data through external APIs (Jupiter, Backed Finance)
+- **Mock Data**: Development uses mock implementations for database-dependent features
 
 ### Risk Engine Architecture
 - 10 risk levels from Ultra Conservative (1) to Ultra Aggressive (10)
@@ -135,7 +153,8 @@ SolStock AI is a Solana-based robo-advisor that allows users to trade real stock
 - Risk level 10: 70% TSLA, 8% AAPL, 7% MSFT (ultra aggressive)
 - Dynamic position calculation based on total investment amount
 
-### Database Schema
+### Database Schema (Legacy Reference)
+Note: Database functionality is currently disabled. The following schema exists for reference:
 - `users` - User profiles with wallet addresses and risk tolerance
 - `portfolios` - Portfolio metadata with P&L tracking
 - `positions` - Individual stock positions with allocation percentages
@@ -155,14 +174,16 @@ SolStock AI is a Solana-based robo-advisor that allows users to trade real stock
 - `NEXT_PUBLIC_SUPABASE_URL` - Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Supabase anonymous key
 - `SUPABASE_SERVICE_ROLE_KEY` - Supabase service role for Edge Functions
+- `NEXT_PUBLIC_PRIVY_APP_ID` - Privy application ID for authentication
 - `NEXT_PUBLIC_TRADING_RPC_URL` - Custom Solana RPC endpoint (optional)
 - `JUP_API_KEY` - Jupiter API key for enhanced rate limits (optional)
 
 ### Development Workflow
-- **Dual Environment**: Mock providers for development, real providers for production
-- **Type Generation**: Supabase CLI generates TypeScript types from database schema
-- **Component Development**: shadcn/ui components with consistent theming
-- **Real-time Testing**: Supabase subscriptions for live data updates
+- **Authentication Testing**: Privy provides seamless wallet connection in all environments
+- **Mock Data Development**: Use mock implementations for database-dependent features during development
+- **Component Development**: shadcn/ui components with consistent theming and TypeScript interfaces
+- **API Integration**: External APIs (Jupiter, Backed Finance) for live trading and price data
+- **Lenient Build Process**: TypeScript and ESLint errors ignored during builds for rapid iteration
 
 ## Key Development Patterns
 
@@ -185,19 +206,21 @@ SolStock AI is a Solana-based robo-advisor that allows users to trade real stock
 - Responsive design with mobile-first approach
 
 ### Business Logic Organization
-- Risk engine calculations in dedicated modules
-- Type-safe database operations with Supabase
+- Risk engine calculations in dedicated modules (`lib/risk-engine.ts`)
+- Frontend data management with mock implementations (`lib/frontend-data.ts`)
 - Reusable utility functions in `/lib`
-- Custom hooks for complex state management
+- Custom hooks for complex state management and API integration
 
 ## Development Notes
 
-- Uses dual provider system: MockWalletProvider for development, WalletProvider for production
+- **Current Architecture**: Frontend-only with Privy authentication, Supabase functionality disabled
+- Uses Privy for unified wallet authentication across all environments  
 - Component architecture follows shadcn/ui patterns with consistent styling
 - Risk levels determine portfolio allocation automatically via `getAllocationForRisk()`
-- Rebalancing triggers when allocation drifts > 5% from target
+- Mock implementations handle portfolio data and transaction history for UI development
 - All monetary values use high-precision decimals for accurate calculations
-- Environment variables required for Supabase, Solana RPC, and optional Jupiter API key
-- TypeScript strict mode enabled with path mapping for clean imports
+- Zod schemas provide runtime validation for all data structures
+- TypeScript strict mode enabled with path mapping (`@/components`, `@/lib`, `@/hooks`)
 - Next.js App Router with server/client component separation
-- Automated cron jobs handle portfolio rebalancing and price updates during market hours
+- Build process is configured for rapid iteration with error tolerance (ignore TS/ESLint errors)
+- External APIs (Jupiter, Backed Finance) provide real trading capabilities and market data

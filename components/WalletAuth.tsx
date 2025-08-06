@@ -1,6 +1,6 @@
 import React from 'react'
 import { useWalletAuth } from '@/hooks/useWalletAuth'
-import { useWallet } from '@solana/wallet-adapter-react'
+import { useWallets } from '@privy-io/react-auth'
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'

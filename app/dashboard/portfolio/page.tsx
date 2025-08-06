@@ -4,15 +4,14 @@ import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Portfolio } from "@/components/Portfolio"
 import { OnboardingFlow, type OnboardingData } from "@/components/OnboardingFlow"
-import { useWalletAuth } from "@/hooks/useWalletAuth"
+import { usePrivyAuth } from "@/hooks/usePrivyAuth"
 import { usePortfolio } from "@/hooks/usePortfolio"
-import { useWallet } from '@solana/wallet-adapter-react'
+// Removed Solana wallet adapter import - using Privy instead
 
 export default function PortfolioPage() {
   const router = useRouter()
-  const { publicKey } = useWallet()
-  const { isAuthenticated, hasProfile, hasPortfolio, user, loading: authLoading } = useWalletAuth()
-  const walletAddress = publicKey?.toBase58() || null
+  const { isAuthenticated, hasProfile, hasPortfolio, user, loading: authLoading, walletInfo } = usePrivyAuth()
+  const walletAddress = walletInfo?.address || null
   const { portfolio, loading: portfolioLoading } = usePortfolio(walletAddress)
 
   const handleOnboardingComplete = (data: OnboardingData) => {

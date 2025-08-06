@@ -17,17 +17,19 @@ import {
   Download,
   Copy
 } from "lucide-react"
-import { useWallet } from "@solana/wallet-adapter-react"
+// Removed Solana wallet adapter import - using Privy instead
 import { useTransactions } from "@/hooks/useTransactions"
 import { SolscanLogo } from "@/components/SolscanLogo"
 import { CURATED_XSTOCKS } from "@/lib/xstocks-config"
+import { useWallets } from '@privy-io/react-auth'
 
 export function TransactionHistory() {
   const [searchQuery, setSearchQuery] = useState("")
   const [filterType, setFilterType] = useState("all")
   const [sortBy, setSortBy] = useState("date")
   
-  const { publicKey } = useWallet()
+  const { wallets } = useWallets()
+  const publicKey = wallets[0]?.address
   const { transactions, loading, error, refetch } = useTransactions(publicKey?.toString() || null)
 
   // Debug: Log transaction data

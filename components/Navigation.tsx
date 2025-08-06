@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator"
 import { ChevronDown, ChevronUp, TrendingUp, TrendingDown, DollarSign, PieChart, BarChart3, History, Settings, Home, ShoppingCart, LogOut, Wallet } from "lucide-react"
 import { Logo } from "./Logo"
 import { WalletConnectButton } from "./WalletConnectButton"
-import { useWallet } from '@solana/wallet-adapter-react'
+import { useWallets } from '@privy-io/react-auth'
 
 type NavigationProps = {
   currentPage: "landing" | "onboarding" | "dashboard" | "markets" | "portfolio" | "analytics" | "history" | "settings"
@@ -32,7 +32,9 @@ export function Navigation({ currentPage, onNavigate, onLogout }: NavigationProp
     { symbol: "NVDA", value: 2000, change: -0.8 },
   ]
 
-  const { connected, publicKey } = useWallet()
+  const { wallets } = useWallets()
+  const connected = wallets.length > 0
+  const publicKey = wallets[0]?.address
 
   const navigationItems = [
     { id: "dashboard", label: "Dashboard", icon: Home },

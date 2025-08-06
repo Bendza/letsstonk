@@ -1,4 +1,4 @@
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+// Using Privy for wallet connection instead of Solana wallet adapter
 import { 
   Connection, 
   VersionedTransaction, 
@@ -6,7 +6,8 @@ import {
   LAMPORTS_PER_SOL 
 } from "@solana/web3.js";
 import { useCallback, useState } from "react";
-import { supabase } from "@/lib/supabase";
+// Removed supabase dependency - using local data
+import { getStockBySymbol } from "@/lib/frontend-data";
 import { getTradingRpcUrl } from "@/lib/rpc-config";
 
 interface QuoteResponse {
@@ -29,11 +30,24 @@ interface JupiterSwapParams {
   slippageBps?: number;
 }
 
-export const useJupiterTrading = () => {
+export const useJupiterTrading = (walletAddress?: string | null, sendTransactionFn?: Function, walletChainType?: string | null) => {
   // Use a dedicated RPC connection for trading to avoid rate limits
   const tradingConnection = new Connection(getTradingRpcUrl(), 'confirmed');
-  const { connection } = useConnection();
-  const { publicKey, sendTransaction, connected } = useWallet();
+  const connection = tradingConnection; // Use trading connection
+  
+  // Only create PublicKey for Solana addresses
+  let publicKey: PublicKey | null = null;
+  if (walletAddress && walletChainType === 'solana') {
+    try {
+      publicKey = new PublicKey(walletAddress);
+    } catch (err) {
+      console.warn('[JUPITER] Invalid Solana address:', walletAddress);
+      publicKey = null;
+    }
+  }
+  
+  const connected = !!walletAddress && !!publicKey;
+  const sendTransaction = sendTransactionFn;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -106,6 +120,12 @@ export const useJupiterTrading = () => {
       return null;
     }
 
+    // Ensure sendTransaction is available
+    if (typeof sendTransaction !== 'function') {
+      setError('Wallet sendTransaction function not available');
+      return null;
+    }
+
     // Check SOL balance first
     const hasSufficientSol = await checkSolBalance();
     if (!hasSufficientSol) {
@@ -156,7 +176,7 @@ export const useJupiterTrading = () => {
       const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
 
       // Send transaction through wallet using trading connection with better settings
-      const signature = await sendTransaction(transaction, tradingConnection, {
+      const signature = await sendTransaction!(transaction, tradingConnection, {
         skipPreflight: true, // Skip preflight to avoid simulation issues
         maxRetries: 5, // Increased retries
         preflightCommitment: 'processed' // Faster confirmation
@@ -270,37 +290,11 @@ export const useJupiterTrading = () => {
     outputAmount: string;
     type: 'buy' | 'sell';
   }) => {
-    try {
-      console.log('[TRADING] Logging transaction to Supabase:', {
-        signature: params.signature,
-        portfolioId: params.portfolioId,
-        type: params.type,
-        inputToken: params.inputMint,
-        outputToken: params.outputMint
-      });
-
-      const { error } = await supabase
-        .from('transactions')
-        .insert({
-          portfolio_id: params.portfolioId, // Can be null for standalone trades
-          wallet_address: publicKey?.toString() || null,
-          transaction_signature: params.signature,
-          transaction_type: params.type,
-          input_token: params.inputMint,
-          output_token: params.outputMint,
-          input_amount: parseFloat(params.inputAmount),
-          output_amount: parseFloat(params.outputAmount),
-          status: 'confirmed'
-        });
-
-      if (error) {
-        console.error('[TRADING] Failed to log transaction:', error);
-      } else {
-        console.log('[TRADING] Transaction logged successfully to Supabase');
-      }
-    } catch (err) {
-      console.error('[TRADING] Error logging transaction:', err);
-    }
+    // Supabase removed - simply log to console for now
+    console.log('[TRADING] Transaction:', {
+      ...params,
+      wallet: publicKey?.toString() || null
+    });
   }, [publicKey]);
 
   // Buy xStock with USDC or SOL
@@ -311,14 +305,8 @@ export const useJupiterTrading = () => {
     payWith: 'USDC' | 'SOL' = 'USDC'
   ) => {
     try {
-      // Get stock metadata from Supabase
-      const { data: stockData, error } = await supabase
-        .from('xstocks_metadata')
-        .select('solana_address, decimals')
-        .eq('symbol', stockSymbol)
-        .single();
-
-      if (error || !stockData) {
+      const stockData = getStockBySymbol(stockSymbol);
+      if (!stockData) {
         throw new Error(`Stock ${stockSymbol} not found`);
       }
 
@@ -332,7 +320,7 @@ export const useJupiterTrading = () => {
 
       const quote = await getQuote({
         inputMint,
-        outputMint: stockData.solana_address,
+        outputMint: stockData.address,
         amount,
         slippageBps: 300 // 3% slippage for xStocks
       });
@@ -355,14 +343,8 @@ export const useJupiterTrading = () => {
     portfolioId?: string
   ) => {
     try {
-      // Get stock metadata from Supabase
-      const { data: stockData, error } = await supabase
-        .from('xstocks_metadata')
-        .select('solana_address, decimals')
-        .eq('symbol', stockSymbol)
-        .single();
-
-      if (error || !stockData) {
+      const stockData = getStockBySymbol(stockSymbol);
+      if (!stockData) {
         throw new Error(`Stock ${stockSymbol} not found`);
       }
 
@@ -370,7 +352,7 @@ export const useJupiterTrading = () => {
       const amount = Math.floor(stockAmount * Math.pow(10, stockData.decimals || 6));
 
       const quote = await getQuote({
-        inputMint: stockData.solana_address,
+        inputMint: stockData.address,
         outputMint: USDC_MINT,
         amount,
         slippageBps: 300 // 3% slippage for xStocks

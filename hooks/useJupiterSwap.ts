@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
+// Removed Solana wallet adapter import - using Privy instead
 import { Connection, PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { createJupiterApiClient } from '@jup-ag/api';
 import { getTradingRpcUrl } from '@/lib/rpc-config';

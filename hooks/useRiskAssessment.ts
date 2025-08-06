@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+// Removed supabase dependency - using mock data
 
 export interface RiskMetrics {
   portfolioVolatility: number
@@ -45,19 +45,28 @@ export function useRiskAssessment(walletAddress: string | null) {
     setError(null)
 
     try {
-      const { data, error } = await supabase.functions.invoke('risk-analysis', {
-        body: { walletAddress }
-      })
-
-      if (error) {
-        throw error
+      // Generate mock risk assessment
+      const mockAssessment: RiskAssessment = {
+        portfolioId: `portfolio-${walletAddress.slice(0, 8)}`,
+        riskMetrics: {
+          portfolioVolatility: Math.random() * 0.3 + 0.1, // 10-40%
+          sharpeRatio: Math.random() * 1.5 + 0.5, // 0.5-2.0
+          diversificationScore: Math.random() * 40 + 60, // 60-100
+          riskScore: Math.floor(Math.random() * 5) + 3, // 3-7
+          recommendation: 'Portfolio shows moderate risk with good diversification'
+        },
+        stockRiskData: [],
+        recommendations: {
+          overall: 'Your portfolio is well-balanced for your risk tolerance',
+          actions: ['Consider rebalancing quarterly', 'Monitor high-volatility positions'],
+          rebalanceNeeded: Math.random() > 0.7,
+          riskAdjustments: ['Reduce exposure to high-beta stocks']
+        },
+        userRiskTolerance: 5,
+        timestamp: new Date().toISOString()
       }
 
-      if (data?.success) {
-        setRiskAssessment(data)
-      } else {
-        throw new Error(data?.error || 'Failed to fetch risk assessment')
-      }
+      setRiskAssessment(mockAssessment)
     } catch (err) {
       console.error('Risk assessment error:', err)
       setError(err instanceof Error ? err.message : 'Failed to fetch risk assessment')
@@ -73,23 +82,29 @@ export function useRiskAssessment(walletAddress: string | null) {
     setError(null)
 
     try {
-      const { data, error } = await supabase.functions.invoke('risk-analysis', {
-        body: { 
-          walletAddress,
-          riskTolerance 
-        }
-      })
-
-      if (error) {
-        throw error
+      // Generate mock risk assessment based on tolerance
+      const mockAssessment: RiskAssessment = {
+        portfolioId: `portfolio-${walletAddress.slice(0, 8)}`,
+        riskMetrics: {
+          portfolioVolatility: (riskTolerance / 10) * 0.4 + 0.1, // Scale with tolerance
+          sharpeRatio: Math.random() * 1.5 + 0.5,
+          diversificationScore: Math.random() * 40 + 60,
+          riskScore: riskTolerance,
+          recommendation: `Portfolio aligned with ${riskTolerance}/10 risk tolerance`
+        },
+        stockRiskData: [],
+        recommendations: {
+          overall: `Your portfolio matches your ${riskTolerance}/10 risk tolerance`,
+          actions: ['Maintain current allocation', 'Review quarterly'],
+          rebalanceNeeded: false,
+          riskAdjustments: []
+        },
+        userRiskTolerance: riskTolerance,
+        timestamp: new Date().toISOString()
       }
 
-      if (data?.success) {
-        setRiskAssessment(data)
-        return data
-      } else {
-        throw new Error(data?.error || 'Failed to generate risk assessment')
-      }
+      setRiskAssessment(mockAssessment)
+      return mockAssessment
     } catch (err) {
       console.error('Risk assessment generation error:', err)
       setError(err instanceof Error ? err.message : 'Failed to generate risk assessment')

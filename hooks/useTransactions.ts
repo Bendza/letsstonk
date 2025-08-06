@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+// Removed supabase dependency - using mock data
 
 export interface Transaction {
   id: string
@@ -30,14 +30,45 @@ export function useTransactions(walletAddress: string | null) {
     setError(null)
 
     try {
-      const { data, error } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('wallet_address', walletAddress)
-        .order('created_at', { ascending: false })
+      // Generate mock transactions
+      const mockTransactions: Transaction[] = [
+        {
+          id: `tx-1-${walletAddress.slice(0, 8)}`,
+          created_at: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
+          portfolio_id: `portfolio-${walletAddress.slice(0, 8)}`,
+          wallet_address: walletAddress,
+          transaction_type: 'buy',
+          input_token: 'So11111111111111111111111111111111111111112', // SOL
+          output_token: 'XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp', // AAPLx
+          input_amount: 0.5,
+          output_amount: 1.2,
+          price_impact: 0.15,
+          slippage: 3.0,
+          fees: 0.005,
+          status: 'confirmed',
+          block_time: new Date(Date.now() - 86400000).toISOString(),
+          transaction_signature: `mock_tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        },
+        {
+          id: `tx-2-${walletAddress.slice(0, 8)}`,
+          created_at: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
+          portfolio_id: `portfolio-${walletAddress.slice(0, 8)}`,
+          wallet_address: walletAddress,
+          transaction_type: 'buy',
+          input_token: 'So11111111111111111111111111111111111111112', // SOL
+          output_token: 'XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB', // TSLAx
+          input_amount: 1.0,
+          output_amount: 0.8,
+          price_impact: 0.22,
+          slippage: 3.0,
+          fees: 0.01,
+          status: 'confirmed',
+          block_time: new Date(Date.now() - 172800000).toISOString(),
+          transaction_signature: `mock_tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        }
+      ]
 
-      if (error) throw error
-      setTransactions(data as Transaction[])
+      setTransactions(mockTransactions)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch transactions')
     } finally {
@@ -49,29 +80,6 @@ export function useTransactions(walletAddress: string | null) {
   useEffect(() => {
     fetchTransactions()
   }, [fetchTransactions])
-
-  // realtime subscription
-  useEffect(() => {
-    if (!walletAddress) return
-
-    const channel = supabase
-      .channel('transactions-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'transactions',
-          filter: `wallet_address=eq.${walletAddress}`,
-        },
-        () => fetchTransactions()
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [walletAddress, fetchTransactions])
 
   return { transactions, loading, error, refetch: fetchTransactions }
 } 

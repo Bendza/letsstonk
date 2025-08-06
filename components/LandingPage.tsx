@@ -7,7 +7,7 @@ import { DisclaimerModal } from "./DisclaimerModal"
 import { Logo } from "./Logo"
 import { WalletConnectButton } from "./WalletConnectButton"
 import { useWalletAuth } from "@/hooks/useWalletAuth"
-import { useWallet } from '@solana/wallet-adapter-react'
+import { useWallets } from '@privy-io/react-auth'
 import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { ClientOnly } from "./ClientOnly"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
@@ -31,7 +31,8 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
   const [featuredXStocks, setFeaturedXStocks] = useState<XStockWithPrice[]>([])
   const [pricesLoading, setPricesLoading] = useState(true)
   const [copied, setCopied] = useState(false)
-  const { connected } = useWallet()
+  const { wallets } = useWallets()
+  const connected = wallets.length > 0
   const { setVisible: setWalletModalVisible } = useWalletModal()
   const { isAuthenticated, user, hasProfile, hasPortfolio, signOut, manualAuth } = useWalletAuth()
 

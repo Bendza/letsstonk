@@ -17,7 +17,7 @@ import {
   RefreshCw,
 } from "lucide-react"
 import { LineChart, Line, ResponsiveContainer } from "recharts"
-import { fetchXStocks, fetchPrices } from "@/lib/fetchXStocks"
+import { fetchXStocksFrontend, fetchPricesFrontend } from "@/lib/frontend-data"
 import { XStock } from "@/lib/types"
 import { 
   getSolscanLink, 
@@ -92,11 +92,11 @@ export function Markets() {
 
 
 
-      // Fetch xStocks metadata from database
-      const xStocks = await fetchXStocks()
+      // Fetch xStocks metadata from frontend data
+      const xStocks = await fetchXStocksFrontend()
       
       if (xStocks.length === 0) {
-        setError('No xStocks found in database')
+        setError('No xStocks found')
         return
       }
 
@@ -104,7 +104,7 @@ export function Markets() {
       const validStocks = xStocks.filter(stock => stock.address && stock.address.length > 0)
       const addresses = validStocks.map(stock => stock.address)
       
-      const prices = await fetchPrices(addresses)
+      const prices = await fetchPricesFrontend(addresses)
 
       // Use mock token stats to avoid RPC rate limiting (403 errors)
       const onChainStats: Record<string, TokenStats | null> = {}

@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import WalletContextProvider from "../components/WalletProvider"
+import { PrivyProviderWrapper } from "../components/PrivyProvider"
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,7 +16,7 @@ const queryClient = new QueryClient({
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <WalletContextProvider>{children}</WalletContextProvider>
+      <PrivyProviderWrapper>{children}</PrivyProviderWrapper>
     </QueryClientProvider>
   )
 }

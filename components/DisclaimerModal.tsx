@@ -145,17 +145,42 @@ export function DisclaimerModal({ isOpen, onClose, onAccept }: DisclaimerModalPr
               <div className="space-y-3 sm:space-y-4 mt-3 sm:mt-6">
                 <div className="bg-white border border-blue-200 rounded-lg p-3 sm:p-5">
                   <h4 className="font-semibold text-sm sm:text-base text-blue-900 mb-2 sm:mb-3">GEOGRAPHIC RESTRICTIONS</h4>
-                  <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
-                    <strong className="text-blue-800">This platform is NOT available to US persons.</strong> By using this service, 
-                    you confirm that you are not a US citizen, resident, or entity, and are not accessing the platform from within the United States.
-                  </p>
+                  <div className="space-y-2 text-xs sm:text-sm text-gray-700 leading-relaxed">
+                    <p><strong className="text-blue-800">IMPORTANT: This platform is NOT available to:</strong></p>
+                    <ul className="ml-4 space-y-1">
+                      <li>• US persons (citizens, residents, or entities)</li>
+                      <li>• Persons subject to international sanctions</li>
+                      <li>• Residents of restricted jurisdictions</li>
+                      <li>• UK retail clients (professional clients only)</li>
+                    </ul>
+                    <p className="mt-2">
+                      By using this service, you confirm you are not located in a restricted jurisdiction and are not a prohibited person.
+                    </p>
+                  </div>
                 </div>
                 
                 <div className="bg-white border border-blue-200 rounded-lg p-3 sm:p-5">
-                  <h4 className="font-semibold text-sm sm:text-base text-blue-900 mb-2 sm:mb-3">COMPLIANCE REQUIREMENTS</h4>
+                  <h4 className="font-semibold text-sm sm:text-base text-blue-900 mb-2 sm:mb-3">QUALIFIED INVESTOR STATUS</h4>
+                  <div className="space-y-2 text-xs sm:text-sm text-gray-700 leading-relaxed">
+                    <p>
+                      <strong>You must qualify as a "Professional Client"</strong> as defined in applicable financial services regulations:
+                    </p>
+                    <ul className="ml-4 space-y-1">
+                      <li>• Swiss Professional Client (FinSA Article 4(3) and 5(1))</li>
+                      <li>• EU/EEA Qualified Investor (Prospectus Regulation 2017/1129)</li>
+                      <li>• Equivalent qualified/accredited investor status in your jurisdiction</li>
+                    </ul>
+                    <p>
+                      <strong className="text-red-600">If you do not meet these requirements, you are prohibited from using this platform.</strong>
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="bg-white border border-blue-200 rounded-lg p-3 sm:p-5">
+                  <h4 className="font-semibold text-sm sm:text-base text-blue-900 mb-2 sm:mb-3">BACKED FINANCE INTEGRATION</h4>
                   <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
-                    You must comply with all applicable laws and regulations in your jurisdiction. It is your responsibility 
-                    to ensure that your use of this platform is legal in your country of residence.
+                    Tokenized securities are provided by Backed Assets (Liechtenstein) AG, approved by the Financial Market Authority (FMA) 
+                    of Liechtenstein. Securities are governed by Swiss law and backed 1:1 by underlying assets held in regulated custody.
                   </p>
                 </div>
               </div>
@@ -251,7 +276,7 @@ export function DisclaimerModal({ isOpen, onClose, onAccept }: DisclaimerModalPr
                 className="mt-1 flex-shrink-0"
               />
               <label htmlFor="regulatory" className="text-xs sm:text-sm font-medium text-gray-900 leading-relaxed">
-                I confirm I am <strong>not a US person</strong> and am legally permitted to use this service
+                I confirm I am <strong>not a US person</strong>, <strong>qualify as a Professional Client</strong>, and am legally permitted to use this service
               </label>
             </div>
           </div>

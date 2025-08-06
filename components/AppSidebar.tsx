@@ -8,7 +8,7 @@ import { Separator } from '@/components/ui/separator'
 import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar'
 import { ChevronDown, ChevronUp, TrendingUp, TrendingDown, Home, ShoppingCart, PieChart, BarChart3, History, Settings, LogOut } from 'lucide-react'
 import { Logo } from './Logo'
-import { useWallet } from '@solana/wallet-adapter-react'
+import { useWallets } from '@privy-io/react-auth'
 import { WalletConnectButton } from './WalletConnectButton'
 
 interface AppSidebarProps {
@@ -32,7 +32,9 @@ export function AppSidebar({ currentPage, onNavigate, onLogout }: AppSidebarProp
     { symbol: "NVDA", value: 2000, change: -0.8 },
   ]
 
-  const { connected, publicKey } = useWallet()
+  const { wallets } = useWallets()
+  const connected = wallets.length > 0
+  const publicKey = wallets[0]?.address
 
   const navigationItems = [
     { id: "dashboard", label: "Dashboard", icon: Home },

@@ -14,8 +14,8 @@ import {
   DollarSign
 } from "lucide-react"
 import { Logo } from "@/components/Logo"
-import { useWallet } from '@solana/wallet-adapter-react'
-import { useWalletAuth } from '@/hooks/useWalletAuth'
+// Removed Solana wallet adapter import - using Privy instead
+import { usePrivyAuth } from '@/hooks/usePrivyAuth'
 import { usePortfolio } from '@/hooks/usePortfolio'
 
 const navigation = [
@@ -52,11 +52,10 @@ function NavigationItems({ onItemClick }: { onItemClick?: () => void }) {
 }
 
 function WalletSection() {
-  const { publicKey } = useWallet()
-  const { isAuthenticated } = useWalletAuth()
-  const { portfolio } = usePortfolio(publicKey?.toString() || null)
+  const { isAuthenticated, walletInfo } = usePrivyAuth()
+  const walletAddress = walletInfo?.address || ''
+  const { portfolio } = usePortfolio(walletAddress || null)
   
-  const walletAddress = publicKey?.toString() || ''
   const shortAddress = walletAddress ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : ''
   
   const portfolioValue = portfolio?.total_value || 0
@@ -111,11 +110,11 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const { signOut } = useWalletAuth()
+  const { logout } = usePrivyAuth()
   
   const handleLogout = async () => {
     try {
-      await signOut()
+      await logout()
       // Small delay to ensure cleanup completes
       setTimeout(() => {
         window.location.href = '/'

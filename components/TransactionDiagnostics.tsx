@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from 'react'
-import { useWallet } from '@solana/wallet-adapter-react'
+import { useWallets } from '@privy-io/react-auth'
 import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,7 +17,8 @@ interface DiagnosticResult {
 }
 
 export function TransactionDiagnostics() {
-  const { publicKey } = useWallet()
+  const { wallets } = useWallets()
+  const publicKey = wallets[0]?.address
   const [diagnostics, setDiagnostics] = useState<DiagnosticResult[]>([])
   const [running, setRunning] = useState(false)
 

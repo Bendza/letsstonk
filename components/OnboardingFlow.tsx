@@ -10,8 +10,8 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { ArrowRight, ArrowLeft, TrendingUp, Shield, Target, CheckCircle, Loader2, DollarSign, PieChart as PieChartIcon, BarChart3, AlertCircle, Coins } from "lucide-react"
 import { WalletConnectButton } from "./WalletConnectButton"
-import { useWallet } from '@solana/wallet-adapter-react'
-import { useWalletAuth } from '@/hooks/useWalletAuth'
+// Removed Solana wallet adapter import - using Privy instead
+import { usePrivyAuth } from '@/hooks/usePrivyAuth'
 import { useJupiterSwap } from '@/hooks/useJupiterSwap'
 import { useJupiterTrading } from '@/hooks/useJupiterTrading'
 import { usePortfolio } from '@/hooks/usePortfolio'
@@ -44,9 +44,10 @@ export function OnboardingFlow({ onComplete, onBack }: OnboardingFlowProps) {
     autoRebalance: true,
   })
 
-  const { connected, publicKey } = useWallet()
-  const { isAuthenticated, createUserProfile, user } = useWalletAuth()
-  const { portfolio } = usePortfolio(publicKey?.toString() || null)
+  const { isAuthenticated, user, walletInfo } = usePrivyAuth()
+  const connected = !!walletInfo?.address
+  const walletAddress = walletInfo?.address || null
+  const { portfolio } = usePortfolio(walletAddress)
   const { 
     getSwapQuote, 
     calculatePortfolioAllocation, 
@@ -847,100 +848,33 @@ function ExecuteTradesStep({ formData, connected, publicKey, calculatePortfolioA
       throw new Error('User or wallet not available');
     }
 
-    // Import supabase here to avoid dependency issues
-    const { supabase } = await import('@/lib/supabase');
+    // Supabase removed - portfolio creation is now frontend-only
+    console.log('[DB] Portfolio creation skipped - using frontend-only approach');
+    console.log('[DB] Trade results logged:', tradeResults);
     
-    console.log('[DB] Creating portfolio record with trade results:', tradeResults);
-
     // Calculate actual total value from successful trades
     const actualTotalValue = tradeResults
       .filter(result => result.success && result.actualValue)
       .reduce((sum, result) => sum + (result.actualValue || 0), 0);
 
-    // 1. Create portfolio record with actual values
-    const { data: portfolioData, error: portfolioError } = await supabase
-      .from('portfolios')
-      .insert({
-        user_id: user.id,
-        wallet_address: publicKey.toBase58(),
-        risk_level: formData.riskTolerance,
-        initial_investment: formData.initialInvestment,
-        total_value: actualTotalValue, // Use actual value from trades
-        is_active: true
-      })
-      .select()
-      .single();
+    console.log('[DB] Portfolio would have been created with actual value:', actualTotalValue);
+    
+    // Mock portfolio ID for compatibility
+    const portfolioId = `mock-portfolio-${Date.now()}`;
 
-    if (portfolioError) {
-      console.error('[DB] Portfolio creation error:', portfolioError);
-      throw new Error(`Failed to create portfolio: ${portfolioError.message}`);
-    }
-
-    console.log('[DB] Portfolio created with actual value:', actualTotalValue);
-    const portfolioId = portfolioData.id;
-
-    // 2. Create position records for successful trades with actual data
-    const successfulTrades = tradeResults.filter(result => result.success);
-    const positionsToInsert = [];
-
-    for (const trade of successfulTrades) {
-      if (!trade.tokensReceived || !trade.pricePerToken) continue;
-      
-      const tokenAddress = getTokenAddress(trade.symbol);
-      const actualValueUSD = trade.actualValue || 0;
-      const targetPercentage = (actualValueUSD / actualTotalValue) * 100; // Calculate actual percentage
-      
-      positionsToInsert.push({
-        portfolio_id: portfolioId,
-        symbol: trade.symbol,
-        token_address: tokenAddress,
-        amount: trade.tokensReceived, // Actual tokens received
-        target_percentage: targetPercentage, // Actual percentage based on real value
-        current_percentage: targetPercentage,
-        average_price: trade.pricePerToken, // Actual price paid per token
-        current_price: trade.pricePerToken, // Use same as average for now
-        value: actualValueUSD // Actual USD value
-      });
-    }
-
-    if (positionsToInsert.length > 0) {
-      const { error: positionsError } = await supabase
-        .from('positions')
-        .insert(positionsToInsert);
-
-      if (positionsError) {
-        console.error('[DB] Positions creation error:', positionsError);
-        throw new Error(`Failed to create positions: ${positionsError.message}`);
-      }
-
-      console.log('[DB] Created', positionsToInsert.length, 'position records with actual values');
-    }
-
-    // 3. Create transaction records for all trades with actual amounts
-    const transactionsToInsert = tradeResults.map(result => ({
-      portfolio_id: portfolioId,
+    // Transaction logging is now handled in useJupiterTrading
+    console.log('[DB] Transaction logging skipped - handled by trading hooks');
+    
+    // Return mock portfolio data for compatibility
+    return {
+      id: portfolioId,
+      user_id: user.id,
       wallet_address: publicKey.toBase58(),
-      transaction_signature: result.signature || 'failed',
-      transaction_type: 'buy' as const,
-      input_token: 'So11111111111111111111111111111111111111112', // SOL address
-      output_token: getTokenAddress(result.symbol),
-      input_amount: result.solSpent || 0, // Actual SOL spent
-      output_amount: result.tokensReceived || 0, // Actual tokens received
-      status: result.success ? 'confirmed' as const : 'failed' as const
-    }));
-
-    const { error: transactionsError } = await supabase
-      .from('transactions')
-      .insert(transactionsToInsert);
-
-    if (transactionsError) {
-      console.error('[DB] Transactions creation error:', transactionsError);
-      // Don't throw here - portfolio is still created successfully
-    } else {
-      console.log('[DB] Created', transactionsToInsert.length, 'transaction records with actual amounts');
-    }
-
-    return portfolioData;
+      risk_level: formData.riskTolerance,
+      initial_investment: formData.initialInvestment,
+      total_value: actualTotalValue,
+      is_active: true
+    };
   };
 
   // Helper function to get token address from symbol

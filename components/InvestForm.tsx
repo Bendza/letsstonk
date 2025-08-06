@@ -13,7 +13,7 @@ import { InvestmentFormSchema } from "../lib/types"
 import { getAllocationForRisk, calculatePositionAmounts } from "../lib/risk-engine"
 import { fetchXStocks, fetchPrices } from "../lib/fetchXStocks"
 import { useJupiterTrading } from "../hooks/useJupiterTrading"
-import { useWallet } from '@solana/wallet-adapter-react'
+import { useWallets } from '@privy-io/react-auth'
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
 import { usePortfolio } from "../hooks/usePortfolio"
 
@@ -33,7 +33,9 @@ const riskLabels = {
 }
 
 export function InvestForm() {
-  const { connected, publicKey } = useWallet()
+  const { wallets } = useWallets()
+  const connected = wallets.length > 0
+  const publicKey = wallets[0]?.address
   const [riskLevel, setRiskLevel] = useState(5)
   const [solAmount, setSolAmount] = useState("")
   const [isInvesting, setIsInvesting] = useState(false)
