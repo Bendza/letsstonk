@@ -159,9 +159,6 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
         headers['x-api-key'] = apiKey
       }
 
-      // Check if this involves a PreStock token (addresses start with 'Pre')
-      const isPreStockSwap = quoteResponse.inputMint.startsWith('Pre') || quoteResponse.outputMint.startsWith('Pre')
-      
       const swapResponse = await fetch('https://quote-api.jup.ag/v6/swap', {
         method: 'POST',
         headers,
@@ -169,15 +166,15 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
           quoteResponse,
           userPublicKey: publicKey.toString(),
           wrapAndUnwrapSol: true,
-          useSharedAccounts: !isPreStockSwap, // Disable shared accounts for PreStocks
+          useSharedAccounts: false, // Disable shared accounts for all tokens
           dynamicComputeUnitLimit: true,
           dynamicSlippage: { // Allow dynamic slippage adjustment
-            maxBps: isPreStockSwap ? 1500 : 1000 // Higher slippage for PreStocks
+            maxBps: 1000 // Max 10% slippage
           },
           prioritizationFeeLamports: {
             priorityLevelWithMaxLamports: {
-              maxLamports: isPreStockSwap ? 2000000 : 1000000, // Higher fees for PreStocks
-              priorityLevel: isPreStockSwap ? "high" : "medium" // Higher priority for PreStocks
+              maxLamports: 1000000, // 1M lamports
+              priorityLevel: "medium" // Medium priority
             }
           }
         })
@@ -201,7 +198,7 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
       // Send transaction through wallet using trading connection with better settings
       const signature = await sendTransaction!(transaction, tradingConnection, {
         skipPreflight: true, // Skip preflight to avoid simulation issues
-        maxRetries: 5, // Increased retries
+        maxRetries: 5, // Standard retries
         preflightCommitment: 'processed' // Faster confirmation
       });
 
@@ -361,7 +358,16 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
       }
 
       const SOL_MINT = 'So11111111111111111111111111111111111111112'; // Native SOL
-      const amount = Math.floor(stockAmount * Math.pow(10, stockData.decimals || 6));
+      
+      // Use same decimal logic as TradingModal
+      const getTokenDecimals = (tokenAddress: string) => {
+        if (tokenAddress.startsWith('Pre')) {
+          return 9  // PreStocks use 9 decimals
+        }
+        return 8  // xStocks use 8 decimals (same as TradingModal)
+      }
+      const tokenDecimals = getTokenDecimals(stockData.address);
+      const amount = Math.floor(stockAmount * Math.pow(10, tokenDecimals));
 
       const quote = await getQuote({
         inputMint: stockData.address,
