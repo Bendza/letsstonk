@@ -10,18 +10,19 @@ import {
   Search, 
   TrendingUp, 
   TrendingDown, 
-  Star, 
   Filter,
   RefreshCw,
   ArrowUpRight,
   ArrowDownRight,
   BarChart3,
-  ExternalLink
+  ExternalLink,
+  Copy,
+  Check
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { PrivyWalletButton } from './PrivyWalletButton';
 import { TradingModal } from './TradingModal';
-import { StockDisclaimerModal } from './StockDisclaimerModal';
+import { StockDisclaimerModal, hasAcceptedStockDisclaimer } from './StockDisclaimerModal';
 import { toast } from 'sonner';
 import { usePrivyAuth } from '@/hooks/usePrivyAuth';
 import { fetchXStocksFrontend, fetchJupiterPriceData } from '@/lib/frontend-data';
@@ -51,13 +52,13 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
   const [allTokens, setAllTokens] = useState<(TokenWithPrice | PreStockWithPrice)[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('market-cap');
+  const [sortBy, setSortBy] = useState('price-high');
   const [selectedSector, setSelectedSector] = useState('all');
   const [selectedTokenType, setSelectedTokenType] = useState('all');
-  const [favorites, setFavorites] = useState<string[]>(['AAPLx', 'TSLAx', 'NVDAx']);
   const [selectedStock, setSelectedStock] = useState<any>(null);
   const [showTradingModal, setShowTradingModal] = useState(false);
   const [showStockDisclaimer, setShowStockDisclaimer] = useState(false);
+  const [copied, setCopied] = useState(false);
   
   const { isAuthenticated, hasProfile, hasPortfolio } = usePrivyAuth();
 
@@ -89,14 +90,12 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
     const fetchData = async () => {
       try {
         setLoading(true);
-        console.log('[MARKETPLACE] Fetching xStocks and Jupiter price data...');
         
         const xStocks = await fetchXStocksFrontend();
         const addresses = xStocks.map(stock => stock.address);
         
         // Fetch real Jupiter price data with volume and market cap
         const jupiterData = await fetchJupiterPriceData(addresses);
-        console.log('[MARKETPLACE] Jupiter data received:', Object.keys(jupiterData).length, 'tokens');
 
         const tokensWithPrices: TokenWithPrice[] = xStocks.map(stock => {
           const jupiterInfo = jupiterData[stock.address];
@@ -113,7 +112,6 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
             change = (price * changePercent) / 100;
           }
 
-          console.log(`[MARKETPLACE] ${stock.symbol}: price=$${price}, change=${changePercent.toFixed(2)}%`);
 
           return {
             ...stock,
@@ -128,7 +126,6 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
         // Fetch real Jupiter prices for PreStocks
         const preStockAddresses = preStocksConfig.map(stock => stock.address);
         const preStockJupiterData = await fetchJupiterPriceData(preStockAddresses);
-        console.log('[MARKETPLACE] PreStock Jupiter data received:', Object.keys(preStockJupiterData).length, 'tokens');
 
         const preStocksWithPrices: PreStockWithPrice[] = preStocksConfig.map(stock => {
           const jupiterInfo = preStockJupiterData[stock.address];
@@ -145,7 +142,6 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
             change = (price * changePercent) / 100;
           }
 
-          console.log(`[MARKETPLACE] ${stock.symbol}: price=$${price}, change=${changePercent.toFixed(2)}%`);
 
           return {
             ...stock,
@@ -159,9 +155,7 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
         // Combine both token types into a single array
         const combinedTokens = [...tokensWithPrices, ...preStocksWithPrices];
         setAllTokens(combinedTokens);
-        console.log('[MARKETPLACE] Processed', tokensWithPrices.length, 'xStocks and', preStocksWithPrices.length, 'PreStocks =', combinedTokens.length, 'total tokens');
       } catch (error) {
-        console.error('[MARKETPLACE] Failed to fetch tokens:', error);
       } finally {
         setLoading(false);
       }
@@ -213,7 +207,6 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
   };
 
   const handleStockClick = (token: TokenWithPrice) => {
-    console.log('Stock clicked:', token.symbol);
     
     // Convert to the format expected by modals
     const stock = {
@@ -235,13 +228,20 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
       return;
     }
     
-    // Wallet is connected, show disclaimer
-    setShowStockDisclaimer(true);
+    // Check if disclaimer was already accepted for this stock
+    if (hasAcceptedStockDisclaimer(stock.symbol)) {
+      // Skip disclaimer, go directly to trading
+      toast.success('Ready to trade!');
+      setTimeout(() => {
+        setShowTradingModal(true);
+      }, 100);
+    } else {
+      // Show disclaimer first
+      setShowStockDisclaimer(true);
+    }
   };
 
   const handleStockDisclaimerAccept = () => {
-    console.log('Disclaimer accepted. isAuthenticated:', isAuthenticated);
-    console.log('selectedStock:', selectedStock);
     
     setShowStockDisclaimer(false);
     
@@ -250,7 +250,6 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
     
     // Open trading modal after toast (small delay)
     setTimeout(() => {
-      console.log('Setting showTradingModal to true');
       setShowTradingModal(true);
     }, 100);
   };
@@ -260,13 +259,6 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
     setSelectedStock(null);
   };
 
-  const toggleFavorite = (symbol: string) => {
-    setFavorites(prev => 
-      prev.includes(symbol) 
-        ? prev.filter(s => s !== symbol)
-        : [...prev, symbol]
-    );
-  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -304,137 +296,159 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
         
         {/* Content */}
         <div className="relative container mx-auto">
-          <div className="flex gap-8 mx-auto">
-            {/* Logo Image - LEFT SIDE */}
-            <div className="flex justify-center lg:justify-start order-2 lg:order-1">
-              <div className="relative">
-                <img 
-                  src="/image.webp" 
-                  alt="LetsStonk" 
-                  className="w-80 h-80 lg:w-92  lg:h-92 object-contain rounded-xl  p-4"
-                />
-              </div>
-            </div>
-            
-            {/* Text Content - RIGHT SIDE */}
-            <div className="text-center lg:text-left order-1 lg:order-2">
-              <div className="space-y-6 text-center">
-                <Badge className="bg-primary/10 text-primary border-primary/20 px-3 py-1 text-sm font-medium">
-                  Powered by Backed Finance & Solana
-                </Badge>
-                
-                <h1 className="text-3xl lg:text-5xl font-bold tracking-tight leading-tight text-center">
-                  Tokenized Stock
-                  <br />
-                  <span className="text-primary">Trading Platform</span>
-                </h1>
-                
-                <p className="text-lg text-muted-foreground leading-relaxed max-w-xl text-center">
-                  Trade real S&P 500 stocks as tokens on Solana with professional portfolio management, 
-                  24/7 trading, and instant settlement.
-                </p>
-                
-                <div className="flex flex-wrap items-center justify-center lg:justify-center gap-6 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                    <span>Live Market Data</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-primary rounded-full"></div>
-                    <span>24/7 Trading</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                    <span>Instant Settlement</span>
-                  </div>
+          <div className="max-w-6xl mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr_200px] gap-8 items-center">
+              {/* Logo Image - LEFT SIDE */}
+              <div className="flex justify-center order-1 lg:order-1">
+                <div className="relative">
+                  <img 
+                    src="/image.webp" 
+                    alt="LetsStonk" 
+                    className="w-80 h-80 lg:w-92 lg:h-92 object-contain rounded-xl p-4"
+                  />
                 </div>
-                
-     
               </div>
               
+              {/* Text Content - CENTER */}
+              <div className="text-center order-2 lg:order-2 px-4">
+                <div className="space-y-6">
+                  <Badge className="bg-primary/10 text-primary border-primary/20 px-3 py-1 text-sm font-medium">
+                    Powered by Backed Finance & Solana
+                  </Badge>
+                  
+                  <h1 className="text-3xl lg:text-5xl font-bold tracking-tight leading-tight">
+                    Tokenized Stock
+                    <br />
+                    <span className="text-primary">Trading Platform</span>
+                  </h1>
+                  
+                  <p className="text-lg text-muted-foreground leading-relaxed">
+                    Trade real S&P 500 stocks as tokens on Solana with professional portfolio management.
+                  </p>
+                  
+                  <p className="text-sm text-muted-foreground">
+                    Currently supporting{" "}
+                    <a 
+                      href="https://backed.fi" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline font-medium"
+                    >
+                      xStocks
+                    </a>
+                    {" "}and{" "}
+                    <a 
+                      href="https://prestocks.com" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline font-medium"
+                    >
+                      PreStocks
+                    </a>
+                  </p>
+                </div>
+              </div>
+
+              {/* Features - RIGHT SIDE */}
+              <div className="flex justify-center order-3 lg:order-3">
+                <div className="space-y-4 text-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                    <span className="text-muted-foreground">Live Market Data</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 bg-primary rounded-full animate-pulse" style={{animationDelay: '0.5s'}}></div>
+                    <span className="text-muted-foreground">24/7 Trading</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" style={{animationDelay: '1s'}}></div>
+                    <span className="text-muted-foreground">Instant Settlement</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Learn More Link */}
+      {/* Contract Address */}
       <section className="py-4 bg-card/30 border-b border-border/20">
         <div className="container mx-auto px-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            Learn more about{" "}
-            <a 
-              href="https://xstocks.com" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-primary hover:underline font-medium"
-            >
-              xStocks
-            </a>
-            {" "}and{" "}
-            <a 
-              href="https://prestocks.com" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-primary hover:underline font-medium"
-            >
-              PreStocks
-            </a>
-          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
+            <span className="text-sm text-muted-foreground">
+              <span className="hidden sm:inline">Contract Address (CA):</span>
+              <span className="sm:hidden">CA:</span>
+            </span>
+            <div className="flex items-center gap-2 bg-background/50 rounded-lg px-3 py-2 border border-border/30 max-w-full">
+              <code className="text-xs sm:text-sm font-mono text-primary truncate max-w-[200px] sm:max-w-none"></code>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  navigator.clipboard.writeText('');
+                  setCopied(true);
+                  toast.success('Contract address copied!');
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="h-6 w-6 p-0 hover:bg-primary/10 flex-shrink-0"
+              >
+                {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              </Button>
+            </div>
+          </div>
         </div>
       </section>
 
       {/* Filters */}
-      <section className="py-6 border-b border-border/20">
+      <section className="py-6">
         <div className="container mx-auto px-6">
-          <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
-            <div className="flex flex-col sm:flex-row gap-4 flex-1 w-full">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search tokens..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-card border-border/20"
-                />
-              </div>
-
-              <Select value={selectedTokenType} onValueChange={setSelectedTokenType}>
-                <SelectTrigger className="w-full sm:w-48 bg-card border-border/20">
-                  <SelectValue placeholder="Token Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Tokens ({allTokens.length})</SelectItem>
-                  <SelectItem value="xstocks">xStocks ({allTokens.filter(t => t.tokenType === 'xstock').length})</SelectItem>
-                  <SelectItem value="prestocks">PreStocks ({allTokens.filter(t => t.tokenType === 'prestock').length})</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={selectedSector} onValueChange={setSelectedSector}>
-                <SelectTrigger className="w-full sm:w-48 bg-card border-border/20">
-                  <SelectValue placeholder="All Sectors" />
-                </SelectTrigger>
-                <SelectContent>
-                  {allSectors.map((sector) => (
-                    <SelectItem key={sector} value={sector}>
-                      {sector === "all" ? "All Sectors" : sector}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-full sm:w-48 bg-card border-border/20">
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="price-high">Price: High to Low</SelectItem>
-                  <SelectItem value="price-low">Price: Low to High</SelectItem>
-                  <SelectItem value="change-high">Top Gainers</SelectItem>
-                  <SelectItem value="change-low">Top Losers</SelectItem>
-                  <SelectItem value="alphabetical">Alphabetical</SelectItem>
-                </SelectContent>
-              </Select>
+          <div className="flex flex-col sm:flex-row gap-4 w-full">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search tokens..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-card border-border/20"
+              />
             </div>
+
+            <Select value={selectedTokenType} onValueChange={setSelectedTokenType}>
+              <SelectTrigger className="w-full sm:w-48 bg-card border-border/20">
+                <SelectValue>All Tokens ({allTokens.length})</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Tokens ({allTokens.length})</SelectItem>
+                <SelectItem value="xstocks">xStocks ({allTokens.filter(t => t.tokenType === 'xstock').length})</SelectItem>
+                <SelectItem value="prestocks">PreStocks ({allTokens.filter(t => t.tokenType === 'prestock').length})</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedSector} onValueChange={setSelectedSector}>
+              <SelectTrigger className="w-full sm:w-48 bg-card border-border/20">
+                <SelectValue>All Sectors</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {allSectors.map((sector) => (
+                  <SelectItem key={sector} value={sector}>
+                    {sector === "all" ? "All Sectors" : sector}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-full sm:w-48 bg-card border-border/20">
+                <SelectValue>Price: High to Low</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="price-high">Price: High to Low</SelectItem>
+                <SelectItem value="price-low">Price: Low to High</SelectItem>
+                <SelectItem value="change-high">Top Gainers</SelectItem>
+                <SelectItem value="change-low">Top Losers</SelectItem>
+                <SelectItem value="alphabetical">Alphabetical</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </section>
@@ -459,25 +473,25 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
                 >
                   <CardContent className="p-4">
                     {/* Header with logo and actions */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-start mb-3">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
                         {token.logoURI ? (
                           <img 
                             src={token.logoURI} 
                             alt={token.name}
-                            className="w-8 h-8 rounded-lg object-cover bg-background border border-border/30"
+                            className="w-8 h-8 rounded-lg object-cover bg-background border border-border/30 flex-shrink-0"
                           />
                         ) : (
-                          <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
+                          <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
                             <span className="text-sm">📈</span>
                           </div>
                         )}
                         <div className="min-w-0 flex-1">
                           <h3 className="font-bold text-sm truncate">{token.symbol}</h3>
-                          <p className="text-xs text-muted-foreground truncate">{token.name}</p>
+                          <p className="text-xs text-muted-foreground truncate" title={token.name}>{token.name}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-start ml-2 flex-shrink-0">
                         <Button
                           variant="ghost" 
                           size="sm"
@@ -485,21 +499,14 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
                             e.stopPropagation();
                             window.open(`https://solscan.io/token/${token.address}`, '_blank');
                           }}
-                          className="w-6 h-6 p-0"
+                          className="w-6 h-6 p-0 opacity-70 hover:opacity-100 transition-opacity"
                           title="View on Solscan"
                         >
-                          <ExternalLink className="h-3 w-3 text-muted-foreground hover:text-primary" />
-                        </Button>
-                        <Button
-                          variant="ghost" 
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFavorite(token.symbol);
-                          }}
-                          className="w-6 h-6 p-0"
-                        >
-                          <Star className={`h-3 w-3 ${favorites.includes(token.symbol) ? 'fill-primary text-primary' : 'text-muted-foreground'}`} />
+                          <img 
+                            src="/solscan-logo-light.svg" 
+                            alt="Solscan" 
+                            className="h-4 w-4"
+                          />
                         </Button>
                       </div>
                     </div>
@@ -521,9 +528,27 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
 
                     {/* Token Info */}
                     <div className="space-y-2 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Address</span>
-                        <span className="font-mono text-xs">{token.address.slice(0, 6)}...{token.address.slice(-4)}</span>
+                      <div className="flex justify-between items-center gap-1">
+                        <span className="text-muted-foreground flex-shrink-0">Address</span>
+                        <div className="flex items-center gap-1 min-w-0">
+                          <span className="font-mono text-xs truncate max-w-[80px] sm:max-w-none" title={token.address}>
+                            <span className="hidden sm:inline">{token.address.slice(0, 6)}...{token.address.slice(-4)}</span>
+                            <span className="sm:hidden">{token.address.slice(0, 4)}...</span>
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(token.address);
+                              toast.success('Address copied!');
+                            }}
+                            className="w-4 h-4 p-0 opacity-50 hover:opacity-100 transition-opacity flex-shrink-0"
+                            title="Copy address"
+                          >
+                            <Copy className="h-2.5 w-2.5" />
+                          </Button>
+                        </div>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Type</span>
@@ -569,7 +594,6 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
       )}
 
       {/* Trading Modal */}
-      {console.log('Render check - showTradingModal:', showTradingModal, 'selectedStock:', selectedStock)}
       {showTradingModal && selectedStock && (
         <TradingModal
           open={showTradingModal}

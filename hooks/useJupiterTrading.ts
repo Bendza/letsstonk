@@ -42,7 +42,6 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
     try {
       publicKey = new PublicKey(walletAddress);
     } catch (err) {
-      console.warn('[JUPITER] Invalid Solana address:', walletAddress);
       publicKey = null;
     }
   }
@@ -160,6 +159,9 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
         headers['x-api-key'] = apiKey
       }
 
+      // Check if this involves a PreStock token (addresses start with 'Pre')
+      const isPreStockSwap = quoteResponse.inputMint.startsWith('Pre') || quoteResponse.outputMint.startsWith('Pre')
+      
       const swapResponse = await fetch('https://quote-api.jup.ag/v6/swap', {
         method: 'POST',
         headers,
@@ -167,15 +169,15 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
           quoteResponse,
           userPublicKey: publicKey.toString(),
           wrapAndUnwrapSol: true,
-          useSharedAccounts: true, // Better for ATA handling
+          useSharedAccounts: !isPreStockSwap, // Disable shared accounts for PreStocks
           dynamicComputeUnitLimit: true,
           dynamicSlippage: { // Allow dynamic slippage adjustment
-            maxBps: 1000 // Max 10% slippage as fallback
+            maxBps: isPreStockSwap ? 1500 : 1000 // Higher slippage for PreStocks
           },
           prioritizationFeeLamports: {
             priorityLevelWithMaxLamports: {
-              maxLamports: 1000000, // Reduced from 10M to 1M lamports
-              priorityLevel: "medium" // Changed from "high" to "medium"
+              maxLamports: isPreStockSwap ? 2000000 : 1000000, // Higher fees for PreStocks
+              priorityLevel: isPreStockSwap ? "high" : "medium" // Higher priority for PreStocks
             }
           }
         })
@@ -203,7 +205,6 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
         preflightCommitment: 'processed' // Faster confirmation
       });
 
-      console.log('Transaction sent:', signature);
 
       // Confirm transaction using trading connection with timeout
       const latestBlockHash = await tradingConnection.getLatestBlockhash();
@@ -215,7 +216,6 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
           signature
         }, 'confirmed');
         
-        console.log('Transaction confirmed:', signature);
         
         // Log transaction to Supabase (always log, even without portfolioId)
         await logTransaction({
@@ -239,7 +239,6 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
         };
       } catch (confirmError) {
         // Transaction might still succeed even if confirmation fails
-        console.warn('Confirmation failed, but transaction may still succeed:', confirmError);
         
         // Check transaction status manually
         setTimeout(async () => {
@@ -250,9 +249,7 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
             });
             
             if (status?.meta?.err) {
-              console.error('Transaction failed:', status.meta.err);
             } else if (status) {
-              console.log('Transaction succeeded after manual check');
               // Log successful transaction (always log, even without portfolioId)
               await logTransaction({
                 portfolioId: portfolioId || null,
@@ -265,7 +262,6 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
               });
             }
           } catch (statusError) {
-            console.error('Failed to check transaction status:', statusError);
           }
         }, 5000); // Check after 5 seconds
         
@@ -282,13 +278,6 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Swap failed';
-      console.error('[TRADING] Swap execution error:', err);
-      console.error('[TRADING] Quote used for swap:', quoteResponse);
-      console.error('[TRADING] Wallet state:', { 
-        publicKey: publicKey?.toString(), 
-        sendTransaction: !!sendTransaction,
-        connected 
-      });
       
       // Provide more helpful error messages
       if (errorMessage.includes('0x1')) {
@@ -318,10 +307,6 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
     type: 'buy' | 'sell';
   }) => {
     // Supabase removed - simply log to console for now
-    console.log('[TRADING] Transaction:', {
-      ...params,
-      wallet: publicKey?.toString() || null
-    });
   }, [publicKey]);
 
   // Buy xStock with USDC or SOL
@@ -358,7 +343,6 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
 
       return await executeSwap(quote, portfolioId);
     } catch (err) {
-      console.error('[TRADING] buyXStock error:', err);
       setError(err instanceof Error ? err.message : 'Buy failed');
       return null;
     }

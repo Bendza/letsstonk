@@ -112,7 +112,6 @@ export function OnboardingFlow({ onComplete, onBack }: OnboardingFlowProps) {
         // Just proceed to final step - actual trading happens in ExecuteTradesStep
         onComplete(formData)
       } catch (error) {
-        console.error('Error creating portfolio:', error)
         // Handle error - maybe show a toast or error message
       } finally {
         setIsCreating(false)
@@ -558,7 +557,6 @@ function PortfolioPreviewStep({ formData, calculatePortfolioAllocationWithPrices
     const fetchAllocation = async () => {
       try {
         setLoading(true);
-        console.log('[PREVIEW] Fetching portfolio allocation with prices...');
         
         const allocationResult = await calculatePortfolioAllocationWithPrices(
           formData.riskTolerance, 
@@ -566,9 +564,7 @@ function PortfolioPreviewStep({ formData, calculatePortfolioAllocationWithPrices
         );
         
         setAllocation(allocationResult);
-        console.log('[PREVIEW] Portfolio allocation loaded:', allocationResult);
       } catch (err) {
-        console.error('[PREVIEW] Error:', err);
         setError('Failed to fetch portfolio allocation.');
       } finally {
         setLoading(false);
@@ -849,21 +845,17 @@ function ExecuteTradesStep({ formData, connected, publicKey, calculatePortfolioA
     }
 
     // Supabase removed - portfolio creation is now frontend-only
-    console.log('[DB] Portfolio creation skipped - using frontend-only approach');
-    console.log('[DB] Trade results logged:', tradeResults);
     
     // Calculate actual total value from successful trades
     const actualTotalValue = tradeResults
       .filter(result => result.success && result.actualValue)
       .reduce((sum, result) => sum + (result.actualValue || 0), 0);
 
-    console.log('[DB] Portfolio would have been created with actual value:', actualTotalValue);
     
     // Mock portfolio ID for compatibility
     const portfolioId = `mock-portfolio-${Date.now()}`;
 
     // Transaction logging is now handled in useJupiterTrading
-    console.log('[DB] Transaction logging skipped - handled by trading hooks');
     
     // Return mock portfolio data for compatibility
     return {
@@ -916,14 +908,12 @@ function ExecuteTradesStep({ formData, connected, publicKey, calculatePortfolioA
       const balance = await connection.getBalance(publicKey);
       const solBalance = balance / 1e9;
       
-      console.log(`[PORTFOLIO] SOL Balance: ${solBalance}`);
       
       if (solBalance < 0.05) {
         throw new Error(`Insufficient SOL balance: ${solBalance.toFixed(4)} SOL. Need at least 0.05 SOL for multiple transactions.`);
       }
 
       const allocation = calculatePortfolioAllocation(formData.riskTolerance, formData.initialInvestment);
-      console.log('[EXECUTE] Starting portfolio creation with allocation:', allocation);
       
       setStatus(prev => ({
         ...prev,
@@ -948,7 +938,6 @@ function ExecuteTradesStep({ formData, connected, publicKey, calculatePortfolioA
         }));
 
         try {
-          console.log(`[PORTFOLIO] Buying ${stockSymbol} with ${solAmount.toFixed(4)} SOL (was ${position.usdcAmount} USDC)`);
           
           const swapResult = await buyXStock(stockSymbol, solAmount, undefined, 'SOL');
           
@@ -988,7 +977,6 @@ function ExecuteTradesStep({ formData, connected, publicKey, calculatePortfolioA
           }
           
         } catch (error) {
-          console.error(`Failed to buy ${stockSymbol}:`, error);
           results.push({ 
             symbol: stockSymbol, 
             success: false, 
@@ -1042,7 +1030,6 @@ function ExecuteTradesStep({ formData, connected, publicKey, calculatePortfolioA
             await createPortfolioInDatabase(results, allocation);
             console.log('[DB] Portfolio records created successfully in background');
           } catch (dbError) {
-            console.error('Background database error:', dbError);
           }
         }, 500);
         
@@ -1063,7 +1050,6 @@ function ExecuteTradesStep({ formData, connected, publicKey, calculatePortfolioA
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      console.error('[EXECUTE] Error:', err);
       
       setStatus({
         type: 'error',

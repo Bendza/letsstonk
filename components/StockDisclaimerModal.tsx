@@ -1,12 +1,22 @@
 "use client"
 
 import { useState, useRef } from "react"
+
+export function hasAcceptedStockDisclaimer(stockSymbol: string): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const acceptedStocks = JSON.parse(localStorage.getItem('stockDisclaimerAccepted') || '{}')
+    return !!acceptedStocks[stockSymbol]
+  } catch {
+    return false
+  }
+}
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
-import { AlertTriangle, X } from "lucide-react"
+import { AlertTriangle, X, ExternalLink } from "lucide-react"
 
 interface StockDisclaimerModalProps {
   isOpen: boolean
@@ -17,6 +27,7 @@ interface StockDisclaimerModalProps {
     name: string
     price: number
     logoUri?: string
+    address: string
   }
 }
 
@@ -37,6 +48,11 @@ export function StockDisclaimerModal({ isOpen, onClose, onAccept, stock }: Stock
 
   const handleAccept = () => {
     if (canProceed) {
+      // Store acceptance in localStorage
+      const acceptedStocks = JSON.parse(localStorage.getItem('stockDisclaimerAccepted') || '{}')
+      acceptedStocks[stock.symbol] = true
+      localStorage.setItem('stockDisclaimerAccepted', JSON.stringify(acceptedStocks))
+      
       onAccept()
       // Reset state
       setHasScrolledToBottom(false)
@@ -53,7 +69,7 @@ export function StockDisclaimerModal({ isOpen, onClose, onAccept, stock }: Stock
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl w-[95vw] max-h-[95vh] p-0 bg-background overflow-hidden border border-border">
+      <DialogContent className="max-w-4xl w-[95vw] h-[95vh] sm:max-h-[95vh] p-0 bg-background overflow-hidden border border-border flex flex-col">
         {/* Header */}
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
           <div className="flex items-center gap-4">
@@ -64,7 +80,7 @@ export function StockDisclaimerModal({ isOpen, onClose, onAccept, stock }: Stock
                 className="w-12 h-12 rounded-lg object-cover bg-background border border-border"
               />
             )}
-            <div>
+            <div className="flex-1">
               <DialogTitle className="text-2xl font-bold tracking-tight text-foreground">
                 Trade {stock.symbol}
               </DialogTitle>
@@ -72,12 +88,21 @@ export function StockDisclaimerModal({ isOpen, onClose, onAccept, stock }: Stock
                 {stock.name} • ${stock.price.toFixed(2)}
               </p>
             </div>
+            <a 
+              href={stock.address.startsWith('Pre') ? "https://prestocks.com" : "https://xstocks.com"}
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-xs text-primary hover:underline flex items-center gap-1"
+            >
+              Learn more about {stock.address.startsWith('Pre') ? 'PreStocks' : 'xStocks'}
+              <ExternalLink className="h-3 w-3" />
+            </a>
           </div>
         </DialogHeader>
         
         <ScrollArea 
           ref={scrollAreaRef}
-          className="px-6 h-[50vh] sm:h-[400px]"
+          className="px-6 flex-1 min-h-0"
           onScrollCapture={handleScroll}
         >
           <div className="space-y-6 pb-6">
@@ -135,36 +160,36 @@ export function StockDisclaimerModal({ isOpen, onClose, onAccept, stock }: Stock
         </ScrollArea>
         
         {/* Acceptance Checkbox */}
-        <div className="px-6 py-4 bg-card/50 border-t border-border">
-          <div className="flex items-start gap-3 mb-4">
+        <div className="px-6 py-4 bg-card/50 border-t border-border flex-shrink-0">
+          <div className="flex items-center justify-start mt-2 gap-3 mb-4">
             <Checkbox 
               id="terms" 
               checked={termsAccepted}
               onCheckedChange={(checked) => setTermsAccepted(checked as boolean)}
-              className="mt-1 flex-shrink-0"
+              className="flex-shrink-0"
             />
-            <label htmlFor="terms" className="text-sm font-medium text-foreground leading-relaxed">
-              I have read and accept all disclaimers, confirm I am <strong>not a US person</strong>, and understand the risks of trading xStocks
+            <label htmlFor="terms" className="text-xs font-medium text-foreground leading-relaxed">
+              I accept all disclaimers, confirm I'm <strong>not a US person</strong>, and understand the risks
             </label>
           </div>
           
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+          <div className="flex flex-col gap-3">
             <div className="text-xs text-muted-foreground text-center sm:text-left">
               {!hasScrolledToBottom && "Please scroll to the bottom to continue"}
               {hasScrolledToBottom && !canProceed && "Please accept the terms to continue"}
             </div>
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
+            <div className="flex gap-3 w-full">
               <Button 
                 variant="outline" 
                 onClick={handleClose}
-                className="px-4 sm:px-6 order-2 sm:order-1"
+                className="flex-1 sm:flex-initial sm:px-6"
               >
                 Cancel
               </Button>
               <Button 
                 onClick={handleAccept}
                 disabled={!canProceed}
-                className="px-6 sm:px-8 bg-primary hover:bg-primary/90 text-primary-foreground order-1 sm:order-2"
+                className="flex-1 sm:flex-initial sm:px-8 bg-primary hover:bg-primary/90 text-primary-foreground"
               >
                 Accept & Trade {stock.symbol}
               </Button>

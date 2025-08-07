@@ -7,11 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { 
   TrendingUp, 
-  Wallet, 
-  History, 
   Menu, 
-  LogOut,
-  DollarSign
+  LogOut
 } from "lucide-react"
 import { Logo } from "@/components/Logo"
 // Removed Solana wallet adapter import - using Privy instead
@@ -20,8 +17,6 @@ import { usePortfolio } from '@/hooks/usePortfolio'
 
 const navigation = [
   { name: "Markets", href: "/dashboard/markets", icon: TrendingUp },
-  { name: "Portfolio", href: "/dashboard/portfolio", icon: Wallet },
-  { name: "History", href: "/dashboard/history", icon: History },
 ]
 
 function NavigationItems({ onItemClick }: { onItemClick?: () => void }) {
@@ -120,7 +115,6 @@ export default function DashboardLayout({
         window.location.href = '/'
       }, 100)
     } catch (error) {
-      console.error('Logout failed:', error)
       // Even if logout fails, redirect to home page
       setTimeout(() => {
         window.location.href = '/'

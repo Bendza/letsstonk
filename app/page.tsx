@@ -36,7 +36,6 @@ export default function Page() {
     if (page === "dashboard") {
       router.push('/dashboard/markets')
     } else {
-      console.log("Navigate to:", page)
     }
   }
 

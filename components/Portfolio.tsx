@@ -118,12 +118,6 @@ export function Portfolio({ onboardingData, onNavigate, onLogout }: PortfolioPro
 
   // Debug: Log portfolio data when it changes
   useEffect(() => {
-    console.log('[PORTFOLIO COMPONENT] Portfolio data changed:', {
-      portfolio,
-      loading: portfolioLoading,
-      error: portfolioError,
-      hasPositions: portfolio?.positions?.length || 0
-    });
   }, [portfolio, portfolioLoading, portfolioError]);
 
   // Set error state from portfolio hook
@@ -207,10 +201,6 @@ export function Portfolio({ onboardingData, onNavigate, onLogout }: PortfolioPro
 
   // Debug: Log processed positions
   useEffect(() => {
-    if (portfolio) {
-      console.log('[PORTFOLIO COMPONENT] Raw positions from DB:', portfolio.positions);
-      console.log('[PORTFOLIO COMPONENT] Processed positions for display:', positions);
-    }
   }, [portfolio, positions]);
 
   // Show empty state if no portfolio found (user hasn't created one yet)
@@ -241,14 +231,6 @@ export function Portfolio({ onboardingData, onNavigate, onLogout }: PortfolioPro
 
   // Debug: Log portfolio values after calculation
   useEffect(() => {
-    if (portfolio) {
-      console.log('[PORTFOLIO COMPONENT] Portfolio values:', {
-        currentValue,
-        initialInvestment,
-        totalReturn,
-        totalReturnPercent
-      });
-    }
   }, [portfolio, currentValue, initialInvestment, totalReturn, totalReturnPercent]);
 
   // Create pie chart data from real positions

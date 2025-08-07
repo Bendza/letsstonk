@@ -34,16 +34,6 @@ export function TransactionHistory() {
 
   // Debug: Log transaction data
   useEffect(() => {
-    console.log('[TRANSACTION HISTORY] Transactions loaded:', {
-      count: transactions.length,
-      transactions: transactions.map(tx => ({
-        signature: tx.transaction_signature,
-        type: tx.transaction_type,
-        portfolio_id: tx.portfolio_id,
-        status: tx.status,
-        created_at: tx.created_at
-      }))
-    });
   }, [transactions]);
 
   // Filter and search transactions

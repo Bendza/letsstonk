@@ -46,14 +46,12 @@ export function usePortfolio(walletAddress?: string | null) {
     const address = walletAddress || user?.wallet?.address;
     
     if (!address || !isAuthenticated) {
-      console.log('[PORTFOLIO] Skipping fetch - no wallet or not authenticated');
       setPortfolio(null);
       setLoading(false);
       return;
     }
 
     try {
-      console.log('[PORTFOLIO] Generating mock portfolio for wallet:', address);
       setLoading(true);
       setError(null);
 
@@ -61,10 +59,8 @@ export function usePortfolio(walletAddress?: string | null) {
       const mockPortfolio = generateMockPortfolio(address, 5); // Default risk level 5
       
       setPortfolio(mockPortfolio);
-      console.log('[PORTFOLIO] Mock portfolio generated with', mockPortfolio.positions.length, 'positions');
 
     } catch (err) {
-      console.error('[PORTFOLIO] Error generating portfolio:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate portfolio';
       setError(errorMessage);
       setPortfolio(null);
@@ -77,15 +73,12 @@ export function usePortfolio(walletAddress?: string | null) {
     if (!portfolio) return;
 
     try {
-      console.log('[PORTFOLIO] Syncing portfolio...');
       setError(null);
 
       // Just refresh the mock data
       await fetchPortfolio();
       
-      console.log('[PORTFOLIO] Portfolio synced successfully');
     } catch (err) {
-      console.error('[PORTFOLIO] Error syncing portfolio:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to sync portfolio';
       setError(errorMessage);
       throw err;

@@ -63,15 +63,12 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
   // Always call the hooks - this is required by React's Rules of Hooks
   const { wallets: realWallets } = useSolanaWallets()
   const { wallets: allWallets } = useWallets()
-  console.log('[PRIVY] useSolanaWallets returned:', realWallets);
-  console.log('[PRIVY] useWallets returned:', allWallets);
   
   // Create demo wallet if in demo mode
   const demoWallet = isDemoMode && isAuthenticated ? {
     address: 'DemoWallet1234567890123456789012345678',
     chainType: 'solana',
     sendTransaction: async (transaction: any, connection: any, options: any) => {
-      console.log('[DEMO] Mock transaction sent:', { transaction, options })
       // Return a mock signature
       return `demo_signature_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     }
@@ -85,7 +82,6 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
   const ethereumWallet = allConnectedWallets?.find(w => {
     // Check if it's an Ethereum wallet by looking at the wallet type or chain
     const wallet = w as any
-    console.log('[PRIVY] Checking wallet for ETH:', wallet)
     return wallet.walletClientType === 'metamask' || 
            wallet.walletClientType === 'phantom' || 
            wallet.chainType === 'ethereum' ||
@@ -109,12 +105,6 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
       // since Jupiter quotes are working (SOL -> xStock swaps)
       walletChainType = 'solana'
     }
-    console.log('[PRIVY] Active wallet details:', {
-      address: walletAddress,
-      chainType: walletChainType,
-      walletClientType: wallet.walletClientType,
-      chain: wallet.chain
-    })
   }
   
   const sendTransaction = activeWallet?.sendTransaction || null
@@ -154,7 +144,6 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
         const lamports = await connection.getBalance(publicKey)
         setSolBalance(lamports / 1e9)
       } catch (err) {
-        console.warn('Balance fetch failed', err)
         setSolBalance(null)
       }
     }
@@ -195,7 +184,6 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
           setTokenBalance(0)
         }
       } catch (err) {
-        console.warn('Token balance fetch failed', err)
         setTokenBalance(0)
       } finally {
         setTokenBalanceLoading(false)
@@ -209,12 +197,10 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
   useEffect(() => {
     const fetchQuote = async () => {
       if (!amount || parseFloat(amount) <= 0 || !isAuthenticated) {
-        console.log('[QUOTE] Skipping quote fetch:', { amount, isAuthenticated })
         setQuote(null)
         return
       }
 
-      console.log('[QUOTE] Starting quote fetch for:', { amount, side, stock: stock.symbol, walletChainType })
       setQuoteLoading(true)
       try {
         const SOL_MINT = 'So11111111111111111111111111111111111111112' // Native SOL
@@ -254,15 +240,6 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
           }
         }
 
-        console.log('[QUOTE] Quote request:', {
-          inputMint,
-          outputMint,
-          amount: amountInDecimals,
-          stockAddress: stock.address,
-          side,
-          walletChainType,
-          originalAmount: amountNum
-        })
 
         const quoteData = await getQuote({
           inputMint,
@@ -271,10 +248,8 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
           slippageBps: 300 // 3% slippage for better success
         })
 
-        console.log('[QUOTE] Quote response:', quoteData)
         setQuote(quoteData)
       } catch (error) {
-        console.error('[QUOTE] Quote fetch error:', error)
         setQuote(null)
       } finally {
         setQuoteLoading(false)
@@ -304,18 +279,9 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
 
   const handleTrade = async () => {
     if (!amount || parseFloat(amount) <= 0 || !connected || !walletChainType) {
-      console.log('[TRADE] Trade blocked:', { amount, connected, walletAddress, walletChainType, sendTransaction: !!sendTransaction })
       return
     }
     
-    console.log('[TRADE] Starting trade:', {
-      side,
-      amount,
-      stock: stock.symbol,
-      walletAddress,
-      connected,
-      sendTransaction: !!sendTransaction
-    })
     
     setLoading(true)
     setShowTransactionFlow(true)
@@ -326,12 +292,6 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
       const tradeAmount = parseFloat(amount)
       const portfolioId = portfolio?.id
       
-      console.log('[TRADE] Trade parameters:', {
-        tradeAmount,
-        portfolioId,
-        side,
-        stockSymbol: stock.symbol
-      })
       
       // Step 1: Get quote
       updateTransactionStep('quote', 'in_progress', 'Getting best price quote...')
@@ -339,46 +299,66 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
       let result: any = null
       
       if (side === 'buy') {
-        console.log('[TRADE] Calling buyXStock...')
         const payWith = walletChainType === 'ethereum' ? 'USDC' : 'SOL'
         result = await buyXStock(stock.symbol, tradeAmount, portfolioId, payWith)
       } else {
-        console.log('[TRADE] Calling sellXStock...')
         result = await sellXStock(stock.symbol, tradeAmount, portfolioId)
       }
       
-      console.log('[TRADE] Trade result:', result)
       
       if (result?.signature) {
         const signature = result.signature
-        console.log('[TRADE] Trade successful:', signature)
         updateTransactionStep('quote', 'completed', 'Quote received')
-        updateTransactionStep('transaction', 'completed', 'Transaction executed', signature)
-        updateTransactionStep('confirmation', 'completed', 'Transaction confirmed')
-        updateTransactionStep('database', 'completed', 'Transaction recorded')
-        updateTransactionStep('portfolio', 'in_progress', 'Updating portfolio...')
+        updateTransactionStep('transaction', 'completed', 'Transaction submitted', signature)
+        updateTransactionStep('confirmation', 'in_progress', 'Verifying transaction...')
         
-        // Sync portfolio
-        if (syncPortfolio) {
-          await syncPortfolio()
-          updateTransactionStep('portfolio', 'completed', 'Portfolio updated')
+        // Verify transaction succeeded on-chain
+        try {
+          const connection = new Connection(getTradingRpcUrl(), 'confirmed')
+          
+          // Wait a bit for the transaction to be processed
+          await new Promise(resolve => setTimeout(resolve, 3000))
+          
+          const status = await connection.getTransaction(signature, {
+            commitment: 'confirmed',
+            maxSupportedTransactionVersion: 0
+          })
+          
+          if (status?.meta?.err) {
+            // Transaction failed on-chain
+            updateTransactionStep('confirmation', 'failed', `Transaction failed: ${JSON.stringify(status.meta.err)}`)
+            throw new Error(`Transaction failed on Solana: ${JSON.stringify(status.meta.err)}`)
+          } else if (status) {
+            // Transaction succeeded
+            updateTransactionStep('confirmation', 'completed', 'Transaction confirmed on-chain')
+            updateTransactionStep('database', 'completed', 'Transaction recorded')
+            updateTransactionStep('portfolio', 'in_progress', 'Updating portfolio...')
+            
+            // Sync portfolio
+            if (syncPortfolio) {
+              await syncPortfolio()
+              updateTransactionStep('portfolio', 'completed', 'Portfolio updated')
+            }
+            
+            // Only reset and close on actual success
+            setAmount("")
+            setLoading(false)
+            
+          } else {
+            // Transaction not found or still pending
+            updateTransactionStep('confirmation', 'failed', 'Transaction not confirmed - may have failed')
+            throw new Error('Transaction not confirmed on-chain')
+          }
+        } catch (verificationError) {
+          updateTransactionStep('confirmation', 'failed', 'Failed to verify transaction')
+          throw verificationError
         }
         
-        // Reset form
-        setTimeout(() => {
-          setAmount("")
-          setShowTransactionFlow(false)
-          setLoading(false)
-          onOpenChange(false)
-        }, 2000)
-        
       } else {
-        console.error('[TRADE] No signature received:', result)
         throw new Error(jupiterError || 'Transaction failed - no signature returned')
       }
       
     } catch (error) {
-      console.error('[TRADE] Trade error:', error)
       setTransactionError(error instanceof Error ? error.message : 'Trade failed')
       
       // Mark current step as failed
@@ -446,7 +426,7 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
   if (showTransactionFlow) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="w-[95vw] max-w-lg sm:max-w-lg max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Transaction Progress</DialogTitle>
           </DialogHeader>
@@ -550,23 +530,24 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-background border border-border">
+      <DialogContent className="w-[95vw] max-w-md sm:max-w-md bg-background border border-border max-h-[95vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <DialogTitle className="flex items-start sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
               {renderLogo()}
-              <div>
-                <div className="font-semibold text-foreground">{stock.symbol}</div>
-                <div className="text-sm text-muted-foreground">{stock.name}</div>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-foreground truncate">{stock.symbol}</div>
+                <div className="text-sm text-muted-foreground truncate">{stock.name}</div>
               </div>
             </div>
             <a 
               href={stock.address.startsWith('Pre') ? "https://prestocks.com" : "https://xstocks.com"}
               target="_blank" 
               rel="noopener noreferrer"
-              className="text-xs text-primary hover:underline flex items-center gap-1"
+              className="text-xs text-primary hover:underline flex items-center gap-1 flex-shrink-0"
             >
-              Learn more about {stock.address.startsWith('Pre') ? 'PreStocks' : 'xStocks'}
+              <span className="hidden sm:inline">Learn more about {stock.address.startsWith('Pre') ? 'PreStocks' : 'xStocks'}</span>
+              <span className="sm:hidden">{stock.address.startsWith('Pre') ? 'PreStocks' : 'xStocks'}</span>
               <ExternalLink className="h-3 w-3" />
             </a>
           </DialogTitle>
@@ -575,12 +556,12 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
         <div className="space-y-4">
           {/* Wallet Connection Check */}
           {!isAuthenticated && (
-            <div className="bg-card border border-border rounded-lg p-4">
+            <div className="bg-card border border-border rounded-lg p-3 sm:p-4">
               <div className="flex items-center gap-3">
                 <Wallet className="w-5 h-5 text-primary" />
                 <div>
-                  <div className="text-sm font-medium text-foreground">Connect Wallet Required</div>
-                  <div className="text-xs text-muted-foreground">Please connect your Solana wallet to trade</div>
+                  <div className="text-sm font-medium text-foreground leading-tight">Connect Wallet Required</div>
+                  <div className="text-xs text-muted-foreground leading-tight">Please connect your Solana wallet to trade</div>
                 </div>
               </div>
               <div className="mt-3">
@@ -596,22 +577,22 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
               {walletChainType === 'solana' && (
                 <Card className="bg-card border-border">
                   <CardContent className="py-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">SOL Balance</span>
-                      <div className="text-right">
+                    <div className="flex justify-between items-start sm:items-center gap-2">
+                      <span className="text-sm text-muted-foreground flex-shrink-0">SOL Balance</span>
+                      <div className="text-right min-w-0 flex-1">
                         {solBalance !== null ? (
                           <>
                             <div className={`font-semibold ${solBalance < 0.01 ? 'text-destructive' : 'text-primary'}`}>
                               {solBalance.toFixed(4)} SOL
                             </div>
                             {solBalance < 0.01 && (
-                              <div className="text-xs text-destructive">
-                                ⚠️ Low balance - need 0.01+ SOL for fees
+                              <div className="text-xs text-destructive text-right">
+                                ⚠️ Low balance
                               </div>
                             )}
                           </>
                         ) : (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center justify-end gap-2">
                             <div className="w-4 h-4 border-2 border-muted border-t-primary rounded-full animate-spin" />
                             <span className="text-sm text-muted-foreground">Loading...</span>
                           </div>
@@ -626,11 +607,11 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
               {side === 'sell' && walletChainType === 'solana' && (
                 <Card className="bg-card border-border">
                   <CardContent className="py-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">Your {stock.symbol} Balance</span>
-                      <div className="text-right">
+                    <div className="flex justify-between items-start sm:items-center gap-2">
+                      <span className="text-sm text-muted-foreground flex-shrink-0">Your {stock.symbol} Balance</span>
+                      <div className="text-right min-w-0 flex-1">
                         {tokenBalanceLoading ? (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center justify-end gap-2">
                             <div className="w-4 h-4 border-2 border-muted border-t-primary rounded-full animate-spin" />
                             <span className="text-sm text-muted-foreground">Loading...</span>
                           </div>
@@ -660,16 +641,16 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
               {/* Current Price */}
               <Card className="bg-card border-border">
                 <CardContent className="py-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Current Price</span>
-                    <div className="flex items-center gap-2">
+                  <div className="flex justify-between items-start sm:items-center gap-2">
+                    <span className="text-sm text-muted-foreground flex-shrink-0">Current Price</span>
+                    <div className="flex items-center gap-2 min-w-0">
                       <div className={`text-xs flex items-center gap-1 ${
                         stock.changePercent >= 0 ? 'text-primary' : 'text-destructive'
                       }`}>
                         {stock.changePercent >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                         {stock.changePercent.toFixed(2)}%
                       </div>
-                      <div className="font-semibold text-foreground">${stock.price.toFixed(2)}</div>
+                      <div className="font-semibold text-foreground whitespace-nowrap">${stock.price.toFixed(2)}</div>
                     </div>
                   </div>
                 </CardContent>
@@ -702,14 +683,14 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                         placeholder={side === 'buy' ? (walletChainType === 'ethereum' ? "100" : "0.1") : "0.30"}
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
-                        className={`${side === 'sell' ? 'pr-20' : ''} [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]`}
+                        className={`${side === 'sell' ? 'pr-20 sm:pr-20' : ''} text-base sm:text-sm [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]`}
                       />
                       {side === 'sell' && tokenBalance !== null && tokenBalance > 0 && (
                         <Button
                           type="button"
                           variant="secondary"
                           size="sm"
-                          className="absolute right-1 top-1/2 -translate-y-1/2 h-8 px-2 text-xs bg-muted hover:bg-muted-foreground hover:text-background border-l border-border rounded-l-none"
+                          className="absolute right-1 top-1/2 -translate-y-1/2 h-8 px-2 text-xs bg-muted hover:bg-muted-foreground hover:text-background border-l border-border rounded-l-none whitespace-nowrap"
                           onClick={handleMaxSell}
                         >
                           Sell All
@@ -788,20 +769,10 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                   )}
 
                   {/* Trade Button */}
-                  {console.log('[DEBUG] Button disabled conditions:', {
-                    loading,
-                    amount,
-                    amountValid: amount && parseFloat(amount) > 0,
-                    connected,
-                    jupiterLoading,
-                    solBalance,
-                    lowBalance: solBalance !== null && solBalance < 0.01,
-                    insufficientFunds: side === 'buy' && solBalance !== null && parseFloat(amount || '0') >= (solBalance - 0.01)
-                  })}
                   <Button
                     onClick={handleTrade}
                     disabled={loading || !amount || parseFloat(amount) <= 0 || !connected || jupiterLoading || (solBalance !== null && solBalance < 0.01) || (side === 'buy' && solBalance !== null && parseFloat(amount) >= (solBalance - 0.01)) || (side === 'sell' && tokenBalance === 0)}
-                    className={`w-full ${
+                    className={`w-full h-12 text-base font-medium ${
                       side === "buy" 
                         ? "bg-green-600 hover:bg-green-700" 
                         : "bg-red-600 hover:bg-red-700"

@@ -141,7 +141,7 @@ export const preStocksConfig: PreStock[] = [
     symbol: 'SSI',
     name: 'Safe Superintelligence PreStocks',
     address: 'Pre2Y4gaf97C4T8ckygDpYbja3w6mH6zmCEs3SA8ALH',
-    logoURI: 'https://prestocks.com/assets/product-logos/ssi.webp',
+    logoURI: 'https://prestocks.com/assets/product-logos/safe-superintelligence.webp',
     sector: 'AI Safety'
   },
   {

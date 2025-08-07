@@ -203,7 +203,6 @@ export async function fetchJupiterPriceData(stockAddresses: string[]): Promise<R
   // Check cache first
   const now = Date.now()
   if (priceCache && (now - priceCache.timestamp) < CACHE_DURATION) {
-    console.log('[JUPITER] Using cached price data')
     
     // Filter cached data to only include requested addresses
     const filteredData: Record<string, JupiterPriceData> = {}
@@ -220,7 +219,6 @@ export async function fetchJupiterPriceData(stockAddresses: string[]): Promise<R
   }
 
   try {
-    console.log('[JUPITER] Fetching fresh price data from Jupiter API v3')
     
     // Use Jupiter Price API v3 with volume and market cap data
     const idsParam = stockAddresses.join(',')
@@ -238,7 +236,6 @@ export async function fetchJupiterPriceData(stockAddresses: string[]): Promise<R
     const apiResponse = await response.json()
     const jupiterData: Record<string, JupiterPriceData> = {}
 
-    console.log('[JUPITER] Raw API response:', apiResponse)
 
     // Extract prices from Jupiter API v3 response
     // Note: Jupiter API v3 returns data directly as an object, not wrapped in a "data" property
@@ -262,11 +259,9 @@ export async function fetchJupiterPriceData(stockAddresses: string[]): Promise<R
       timestamp: now
     }
 
-    console.log('[JUPITER] Cached new price data:', Object.keys(jupiterData).length, 'tokens')
     return jupiterData
 
   } catch (error) {
-    console.warn('[JUPITER] API v3 failed, using fallback data:', error)
     
     // Fallback to hardcoded prices
     const fallbackData: Record<string, JupiterPriceData> = {}

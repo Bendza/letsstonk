@@ -1,19 +1,31 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
+
+export function hasAcceptedDisclaimer(stockSymbol: string): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const acceptedStocks = JSON.parse(localStorage.getItem('disclaimerAccepted') || '{}')
+    return !!acceptedStocks[stockSymbol]
+  } catch {
+    return false
+  }
+}
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { AlertTriangle, Shield, FileText, TrendingUp, DollarSign, Users, Globe } from "lucide-react"
+import { AlertTriangle, Shield, FileText, TrendingUp, DollarSign, Users, Globe, ExternalLink } from "lucide-react"
 
 interface DisclaimerModalProps {
   isOpen: boolean
   onClose: () => void
   onAccept: () => void
+  stockSymbol?: string
+  stockAddress?: string
 }
 
-export function DisclaimerModal({ isOpen, onClose, onAccept }: DisclaimerModalProps) {
+export function DisclaimerModal({ isOpen, onClose, onAccept, stockSymbol, stockAddress }: DisclaimerModalProps) {
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [risksAccepted, setRisksAccepted] = useState(false)
@@ -32,6 +44,12 @@ export function DisclaimerModal({ isOpen, onClose, onAccept }: DisclaimerModalPr
 
   const handleAccept = () => {
     if (canProceed) {
+      // Store acceptance in localStorage if stock info provided
+      if (stockSymbol) {
+        const acceptedStocks = JSON.parse(localStorage.getItem('disclaimerAccepted') || '{}')
+        acceptedStocks[stockSymbol] = true
+        localStorage.setItem('disclaimerAccepted', JSON.stringify(acceptedStocks))
+      }
       onAccept()
       // Reset state
       setHasScrolledToBottom(false)
@@ -54,8 +72,19 @@ export function DisclaimerModal({ isOpen, onClose, onAccept }: DisclaimerModalPr
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-4xl w-[95vw] max-h-[95vh] p-0 bg-white overflow-hidden">
         <DialogHeader className="px-4 sm:px-8 pt-4 sm:pt-8 pb-4 sm:pb-6 bg-gray-50 border-b border-gray-200">
-          <DialogTitle className="text-xl sm:text-3xl font-bold tracking-tight text-gray-900">
-            Terms of Service & Risk Disclosure
+          <DialogTitle className="text-xl sm:text-3xl font-bold tracking-tight text-gray-900 flex items-center justify-between">
+            <span>Terms of Service & Risk Disclosure</span>
+            {stockAddress && (
+              <a 
+                href={stockAddress.startsWith('Pre') ? "https://prestocks.com" : "https://xstocks.com"}
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-xs text-primary hover:underline flex items-center gap-1"
+              >
+                Learn more about {stockAddress.startsWith('Pre') ? 'PreStocks' : 'xStocks'}
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
           </DialogTitle>
           <p className="text-sm sm:text-lg text-gray-600 mt-2">
             Please read carefully and scroll to the bottom to continue
@@ -90,6 +119,15 @@ export function DisclaimerModal({ isOpen, onClose, onAccept }: DisclaimerModalPr
                   <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
                     xStocks are tokenized representations of real stocks, backed 1:1 by actual shares held in regulated custody 
                     by Backed Finance AG. Each token represents fractional ownership in the underlying stock and tracks its price performance.
+                  </p>
+                </div>
+                
+                <div className="bg-white border border-orange-200 rounded-lg p-3 sm:p-5">
+                  <h4 className="font-semibold text-sm sm:text-base text-orange-900 mb-2 sm:mb-3">IMPORTANT: NOT A BROKERAGE</h4>
+                  <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
+                    <strong>SolStock is not a brokerage, broker-dealer, exchange operator, transfer agent, custodian, or similar regulated entity.</strong>{' '}
+                    We are a technology platform that facilitates peer-to-peer trading of tokenized assets on the blockchain. 
+                    All transactions are executed directly between users via smart contracts, and we do not hold, custody, or control any user funds.
                   </p>
                 </div>
               </div>
@@ -230,13 +268,42 @@ export function DisclaimerModal({ isOpen, onClose, onAccept }: DisclaimerModalPr
               </div>
             </div>
 
-            {/* Final Acknowledgment */}
+            {/* Comprehensive Legal Declaration */}
             <div className="bg-gray-900 text-white rounded-lg p-3 sm:p-6">
-              <h3 className="font-bold text-white mb-3 sm:mb-4 text-base sm:text-lg">FINAL ACKNOWLEDGMENT</h3>
-              <p className="text-gray-300 leading-relaxed text-xs sm:text-sm">
-                By proceeding, you acknowledge that you have read and understood all the risks, terms, and conditions outlined above. 
-                You confirm that you are making an informed decision to use this platform and accept full responsibility for your investment decisions.
-              </p>
+              <h3 className="font-bold text-white mb-3 sm:mb-4 text-base sm:text-lg">COMPREHENSIVE LEGAL ACKNOWLEDGMENT</h3>
+              <div className="text-gray-300 leading-relaxed text-xs sm:text-sm space-y-3">
+                <p>By proceeding, I represent, warrant, and agree to each of the following statements:</p>
+                
+                <div className="space-y-2 pl-4">
+                  <p>• I have read, understood and agree to be bound by the Terms of Service and Privacy Policy.</p>
+                  
+                  <p>• I will access and use the Services only if such use is lawful, now and in the future, under all applicable laws; those laws vary by jurisdiction, I will seek qualified legal advice if needed.</p>
+                  
+                  <p>• I am not located in, a citizen or resident of, or otherwise subject to the laws of the United States, Singapore, Panama, or any jurisdiction sanctioned by OFAC, the U.K., or the E.U., nor am I on any sanctions list, and I accept that my access to the Services may be restricted, suspended, or revoked at any time without notice.</p>
+                  
+                  <p>• I will not use the Services until I fully understand their operation, functionality, and risks.</p>
+                  
+                  <p>• I understand that the Services are experimental and provided "as is," and issues with the Services or third-party integrations could result in loss of funds; all blockchain transactions are executed via Privy under my own control and are final, irreversible, and non-refundable; and PreStocks is not registered as, nor purports to act as, a virtual asset service provider, broker-dealer, exchange operator, transfer agent, custodian, or similar regulated entity in any jurisdiction.</p>
+                  
+                  <p>• I have conducted my own research on PreStocks and understand they are bearer digital assets with no ownership, voting, dividend or information rights; are not affiliated with, endorsed by, or issued by referenced companies; and that administrative controls are in place as needed for legal, security, or operational purposes.</p>
+                  
+                  <p>• I understand that acquiring PreStocks involves significant risk; tokens may have no value; profits are not guaranteed; past performance does not predict future results; forward-looking statements are uncertain; and secondary-market liquidity is not guaranteed.</p>
+                  
+                  <p>• I understand that any redemption of PreStocks, if accepted, delivers USDC only, is subject to commercially reasonable efforts to realise liquid value from backing reserves or other available sources, may be partial or unsuccessful, and that minimum redemption sizes, fees, and additional costs may apply.</p>
+                  
+                  <p>• I understand that all blockchain transactions involving PreStocks via the Services are secondary transfers effected outside the United States and are not primary issuances or offers to U.S. persons.</p>
+                  
+                  <p>• I acknowledge that all information provided or referenced on the Website is for informational purposes only and shall not be construed or relied upon as legal, financial, tax, accounting, investment, or any other professional advice; is not a recommendation or solicitation to buy or sell securities or to engage with the Services; is not guaranteed to be accurate, complete, or useful; is used at my own risk; may change without notice; and I am responsible for obtaining current information and performing my own due diligence before each use of the Services.</p>
+                  
+                  <p>• I understand that the Services, including all features, functionality, fees, mechanisms, rules, parameters, rights, and integrations, may be modified, restricted, suspended, or discontinued at any time without prior notice, including to comply with evolving laws or regulations.</p>
+                  
+                  <p>• I irrevocably waive all past, present, and future claims and agree to indemnify and hold harmless PreStocks, its employees, contributors, affiliates, and associated parties from any liability, loss, cost, or other legal action arising out of or relating to my use of the Services.</p>
+                  
+                  <p>• I acknowledge that my use of the Services creates no partnership, joint-venture, agency, or fiduciary relationship with PreStocks.</p>
+                </div>
+                
+                <p className="font-semibold">If I do not agree to every statement above, I will immediately exit the Website and refrain from using the Services.</p>
+              </div>
             </div>
           </div>
         </ScrollArea>
@@ -252,7 +319,13 @@ export function DisclaimerModal({ isOpen, onClose, onAccept }: DisclaimerModalPr
                 className="mt-1 flex-shrink-0"
               />
               <label htmlFor="terms" className="text-xs sm:text-sm font-medium text-gray-900 leading-relaxed">
-                I have read and agree to the <strong>Terms of Service</strong> and understand the platform's operations
+                I have read, understood and agree to be bound by the{' '}
+                <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">
+                  Terms of Service
+                </a>{' '}and{' '}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">
+                  Privacy Policy
+                </a>
               </label>
             </div>
             

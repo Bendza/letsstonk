@@ -55,7 +55,6 @@ export function InvestForm() {
         const xStocks = await fetchXStocks()
         
         if (xStocks.length === 0) {
-          console.error('No xStocks found in database')
           return
         }
 
@@ -68,7 +67,6 @@ export function InvestForm() {
         setStocks(xStocks)
         setStockPrices(prices)
       } catch (err) {
-        console.error('Failed to fetch stock data:', err)
       } finally {
         setLoading(false)
       }
@@ -98,19 +96,15 @@ export function InvestForm() {
         
         if (solAllocation > 0.001) { // Only trade if allocation is meaningful (> 0.001 SOL)
           try {
-            console.log(`Buying ${allocation.symbol} with ${solAllocation} SOL`)
             const signature = await buyXStock(allocation.symbol, solAllocation, portfolioId, 'SOL')
             
             if (signature) {
-              console.log(`Successfully bought ${allocation.symbol}:`, signature)
             } else {
-              console.error(`Failed to buy ${allocation.symbol}`)
             }
             
             // Small delay between trades to avoid rate limits
             await new Promise(resolve => setTimeout(resolve, 1000))
           } catch (error) {
-            console.error(`Error buying ${allocation.symbol}:`, error)
           }
         }
       }
@@ -124,7 +118,6 @@ export function InvestForm() {
       setSolAmount("")
       
     } catch (error) {
-      console.error('Investment failed:', error)
     } finally {
       setIsInvesting(false)
     }
