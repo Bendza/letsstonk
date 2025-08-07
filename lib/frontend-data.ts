@@ -1,4 +1,5 @@
 import { XStock } from './types'
+import { preStocksConfig, PreStock } from './prestocks-config'
 
 // Frontend-only xStocks data - no database required
 export const XSTOCKS_DATA: XStock[] = [
@@ -288,14 +289,24 @@ export function getAllTokenAddresses(): string[] {
   return XSTOCKS_DATA.map(stock => stock.address)
 }
 
-// Get stock by symbol
-export function getStockBySymbol(symbol: string): XStock | undefined {
-  return XSTOCKS_DATA.find(stock => stock.symbol === symbol)
+// Get stock by symbol (unified lookup for both xStocks and PreStocks)
+export function getStockBySymbol(symbol: string): XStock | PreStock | undefined {
+  // First search xStocks
+  const xStock = XSTOCKS_DATA.find(stock => stock.symbol === symbol)
+  if (xStock) return xStock
+  
+  // Then search PreStocks
+  return preStocksConfig.find(stock => stock.symbol === symbol)
 }
 
-// Get stock by address
-export function getStockByAddress(address: string): XStock | undefined {
-  return XSTOCKS_DATA.find(stock => stock.address === address)
+// Get stock by address (unified lookup for both xStocks and PreStocks)
+export function getStockByAddress(address: string): XStock | PreStock | undefined {
+  // First search xStocks
+  const xStock = XSTOCKS_DATA.find(stock => stock.address === address)
+  if (xStock) return xStock
+  
+  // Then search PreStocks
+  return preStocksConfig.find(stock => stock.address === address)
 }
 
 // Mock portfolio data for frontend-only approach

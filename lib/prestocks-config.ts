@@ -71,7 +71,7 @@ export const preStocksConfig: PreStock[] = [
     symbol: 'EPIC',
     name: 'Epic Games PreStocks',
     address: 'PreGJxNkwFp8KmtA5rnvgv2z3zAa8c2UQMfN4FjPh4Z',
-    logoURI: 'https://prestocks.com/assets/product-logos/epic.webp',
+    logoURI: 'https://prestocks.com/assets/product-logos/epic-games.webp',
     sector: 'Gaming'
   },
   {

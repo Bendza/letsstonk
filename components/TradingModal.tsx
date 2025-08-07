@@ -181,28 +181,31 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
         let outputMint: string
         let amountInDecimals: number
         
+        // Get correct decimals for the token
+        const tokenDecimals = getTokenDecimals(stock.address)
+        
         if (walletChainType === 'ethereum') {
-          // ETH wallet: use USDC for buying, xStock for selling
+          // ETH wallet: use USDC for buying, token for selling
           if (side === 'buy') {
             inputMint = ETH_MINT // USDC
-            outputMint = stock.address // xStock
+            outputMint = stock.address // Token
             amountInDecimals = Math.floor(amountNum * Math.pow(10, 6)) // USDC has 6 decimals
           } else {
-            inputMint = stock.address // xStock
+            inputMint = stock.address // Token
             outputMint = ETH_MINT // USDC
-            amountInDecimals = Math.floor(amountNum * Math.pow(10, 6)) // xStocks have 6 decimals
+            amountInDecimals = Math.floor(amountNum * Math.pow(10, tokenDecimals)) // Use correct token decimals
           }
         } else {
-          // Default to SOL wallet: use SOL for buying, xStock for selling
+          // Default to SOL wallet: use SOL for buying, token for selling
           // This handles both explicit 'solana' and null/undefined chain types
           if (side === 'buy') {
             inputMint = SOL_MINT // SOL
-            outputMint = stock.address // xStock
+            outputMint = stock.address // Token
             amountInDecimals = Math.floor(amountNum * Math.pow(10, 9)) // SOL has 9 decimals
           } else {
-            inputMint = stock.address // xStock
+            inputMint = stock.address // Token
             outputMint = SOL_MINT // SOL
-            amountInDecimals = Math.floor(amountNum * Math.pow(10, 9)) // xStocks have 9 decimals
+            amountInDecimals = Math.floor(amountNum * Math.pow(10, tokenDecimals)) // Use correct token decimals
           }
         }
 
@@ -371,8 +374,18 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
     const num = parseFloat(value) / Math.pow(10, decimals)
     return num.toLocaleString(undefined, { 
       minimumFractionDigits: 2, 
-      maximumFractionDigits: 6 
+      maximumFractionDigits: 8 
     })
+  }
+  
+  // Determine correct decimals based on token type
+  const getTokenDecimals = (tokenAddress: string) => {
+    // Check if it's a PreStock (addresses start with 'Pre')
+    if (tokenAddress.startsWith('Pre')) {
+      return 8  // PreStocks actually use 8 decimals (same as SPL standard)
+    }
+    // xStocks use 8 decimals
+    return 8
   }
 
   // Show transaction flow
@@ -632,7 +645,7 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                             </div>
                             <div className="flex justify-between">
                               <span>You receive:</span>
-                              <span>{formatNumber(quote.outAmount, 8)} {stock.symbol}</span>
+                              <span>{formatNumber(quote.outAmount, stock.address.startsWith('Pre') ? 6 : 8)} {stock.symbol}</span>
                             </div>
                             <div className="flex justify-between text-sm text-muted-foreground">
                               <span>Price Impact:</span>

@@ -276,7 +276,7 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <img 
-                src="/image.png" 
+                src="/image.webp" 
                 alt="LetsStonk" 
                 className="w-10 h-10 object-contain rounded-lg"
               />
@@ -309,7 +309,7 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
             <div className="flex justify-center lg:justify-start order-2 lg:order-1">
               <div className="relative">
                 <img 
-                  src="/image.png" 
+                  src="/image.webp" 
                   alt="LetsStonk" 
                   className="w-80 h-80 lg:w-92  lg:h-92 object-contain rounded-xl  p-4"
                 />

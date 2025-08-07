@@ -8,6 +8,7 @@ import {
 import { useCallback, useState } from "react";
 // Removed supabase dependency - using local data
 import { getStockBySymbol } from "@/lib/frontend-data";
+import type { PreStock } from "@/lib/prestocks-config";
 import { getTradingRpcUrl } from "@/lib/rpc-config";
 
 interface QuoteResponse {
@@ -80,14 +81,26 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
     slippageBps = 300 // Increased to 3% for better success rate
   }: JupiterSwapParams): Promise<QuoteResponse | null> => {
     try {
+      const headers: HeadersInit = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      }
+
+      // Add API key if available for better rate limits
+      const apiKey = process.env.NEXT_PUBLIC_JUPITER_API_KEY
+      if (apiKey) {
+        headers['x-api-key'] = apiKey
+      }
+
       const response = await fetch(
-        `https://lite-api.jup.ag/swap/v1/quote?` +
+        `https://quote-api.jup.ag/v6/quote?` +
         `inputMint=${inputMint}&` +
         `outputMint=${outputMint}&` +
         `amount=${amount}&` +
         `slippageBps=${slippageBps}&` +
         `onlyDirectRoutes=false&` +
-        `asLegacyTransaction=false`
+        `asLegacyTransaction=false`,
+        { headers }
       );
       
       if (!response.ok) {
@@ -137,11 +150,19 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
 
     try {
       // Get swap transaction from Jupiter with better configuration
-      const swapResponse = await fetch('https://lite-api.jup.ag/swap/v1/swap', {
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json'
+      }
+
+      // Add API key if available
+      const apiKey = process.env.NEXT_PUBLIC_JUPITER_API_KEY
+      if (apiKey) {
+        headers['x-api-key'] = apiKey
+      }
+
+      const swapResponse = await fetch('https://quote-api.jup.ag/v6/swap', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify({
           quoteResponse,
           userPublicKey: publicKey.toString(),
@@ -261,7 +282,13 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Swap failed';
-      console.error('Swap execution error:', err);
+      console.error('[TRADING] Swap execution error:', err);
+      console.error('[TRADING] Quote used for swap:', quoteResponse);
+      console.error('[TRADING] Wallet state:', { 
+        publicKey: publicKey?.toString(), 
+        sendTransaction: !!sendTransaction,
+        connected 
+      });
       
       // Provide more helpful error messages
       if (errorMessage.includes('0x1')) {
@@ -331,6 +358,7 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
 
       return await executeSwap(quote, portfolioId);
     } catch (err) {
+      console.error('[TRADING] buyXStock error:', err);
       setError(err instanceof Error ? err.message : 'Buy failed');
       return null;
     }

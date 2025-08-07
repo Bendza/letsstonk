@@ -53,8 +53,8 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: '/image.png',
-    shortcut: '/image.png',
+    icon: '/image.webp',
+    shortcut: '/image.webp',
     apple: '/apple-touch-icon.png',
   },
 }
