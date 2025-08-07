@@ -202,7 +202,7 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
           } else {
             inputMint = stock.address // xStock
             outputMint = SOL_MINT // SOL
-            amountInDecimals = Math.floor(amountNum * Math.pow(10, 6)) // xStocks have 6 decimals
+            amountInDecimals = Math.floor(amountNum * Math.pow(10, 9)) // xStocks have 9 decimals
           }
         }
 
@@ -628,11 +628,11 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                           <>
                             <div className="flex justify-between">
                               <span>You pay:</span>
-                              <span>{formatNumber(quote.inAmount, 9)} SOL</span>
+                              <span>{parseFloat(amount).toFixed(4)} SOL</span>
                             </div>
                             <div className="flex justify-between">
                               <span>You receive:</span>
-                              <span>{formatNumber(quote.outAmount, 6)} {stock.symbol}</span>
+                              <span>{formatNumber(quote.outAmount, 8)} {stock.symbol}</span>
                             </div>
                             <div className="flex justify-between text-sm text-muted-foreground">
                               <span>Price Impact:</span>
