@@ -52,6 +52,8 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
   const [quote, setQuote] = useState<any>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [solBalance, setSolBalance] = useState<number | null>(null)
+  const [tokenBalance, setTokenBalance] = useState<number | null>(null)
+  const [tokenBalanceLoading, setTokenBalanceLoading] = useState(false)
   
   const { user, isAuthenticated } = usePrivyAuth()
   
@@ -159,6 +161,49 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
 
     getBalance()
   }, [open, connected, walletAddress, walletChainType, isDemoMode])
+
+  // Fetch token balance for the specific stock when modal opens or side changes to sell
+  useEffect(() => {
+    if (!open || side !== 'sell') {
+      setTokenBalance(null)
+      return
+    }
+
+    const getTokenBalance = async () => {
+      if (!connected || !walletAddress || walletChainType !== 'solana') {
+        setTokenBalance(null)
+        return
+      }
+      
+      try {
+        setTokenBalanceLoading(true)
+        const { PublicKey, Connection } = await import('@solana/web3.js')
+        const connection = new Connection(getTradingRpcUrl(), 'confirmed')
+        const walletPublicKey = new PublicKey(walletAddress)
+        
+        // Get token accounts for this wallet
+        const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+          walletPublicKey,
+          { mint: new PublicKey(stock.address) }
+        )
+        
+        if (tokenAccounts.value.length > 0) {
+          const tokenAccount = tokenAccounts.value[0]
+          const balance = tokenAccount.account.data.parsed.info.tokenAmount.uiAmount
+          setTokenBalance(balance || 0)
+        } else {
+          setTokenBalance(0)
+        }
+      } catch (err) {
+        console.warn('Token balance fetch failed', err)
+        setTokenBalance(0)
+      } finally {
+        setTokenBalanceLoading(false)
+      }
+    }
+
+    getTokenBalance()
+  }, [open, side, connected, walletAddress, walletChainType, stock.address, stock.symbol])
 
   // Get quote when amount changes
   useEffect(() => {
@@ -346,6 +391,13 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
     }
   }
 
+  // Set amount to maximum available token balance for selling
+  const handleMaxSell = () => {
+    if (tokenBalance !== null && tokenBalance > 0) {
+      setAmount(tokenBalance.toString())
+    }
+  }
+
   const resetModal = () => {
     setAmount("")
     setShowTransactionFlow(false)
@@ -354,6 +406,8 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
     setTransactionError(null)
     setQuote(null)
     setQuoteLoading(false)
+    setTokenBalance(null)
+    setTokenBalanceLoading(false)
   }
 
   const handleClose = () => {
@@ -507,12 +561,12 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
               </div>
             </div>
             <a 
-              href="https://xstocks.com" 
+              href={stock.address.startsWith('Pre') ? "https://prestocks.com" : "https://xstocks.com"}
               target="_blank" 
               rel="noopener noreferrer"
               className="text-xs text-primary hover:underline flex items-center gap-1"
             >
-              Learn more about xStocks
+              Learn more about {stock.address.startsWith('Pre') ? 'PreStocks' : 'xStocks'}
               <ExternalLink className="h-3 w-3" />
             </a>
           </DialogTitle>
@@ -538,20 +592,64 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
 
           {isAuthenticated && (
             <>
-              {/* SOL Balance Check - Only for Solana wallets */}
-              {solBalance !== null && walletChainType === 'solana' && (
+              {/* SOL Balance - Show for all Solana wallets */}
+              {walletChainType === 'solana' && (
                 <Card className="bg-card border-border">
-                  <CardContent className="pt-4">
+                  <CardContent className="py-4">
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">SOL Balance</span>
                       <div className="text-right">
-                        <div className={`font-semibold ${solBalance < 0.01 ? 'text-destructive' : 'text-primary'}`}>
-                          {solBalance.toFixed(4)} SOL
-                        </div>
-                        {solBalance < 0.01 && (
-                          <div className="text-xs text-destructive">
-                            ⚠️ Low balance - need 0.01+ SOL for fees
+                        {solBalance !== null ? (
+                          <>
+                            <div className={`font-semibold ${solBalance < 0.01 ? 'text-destructive' : 'text-primary'}`}>
+                              {solBalance.toFixed(4)} SOL
+                            </div>
+                            {solBalance < 0.01 && (
+                              <div className="text-xs text-destructive">
+                                ⚠️ Low balance - need 0.01+ SOL for fees
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 border-2 border-muted border-t-primary rounded-full animate-spin" />
+                            <span className="text-sm text-muted-foreground">Loading...</span>
                           </div>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Token Balance - Only show when selling */}
+              {side === 'sell' && walletChainType === 'solana' && (
+                <Card className="bg-card border-border">
+                  <CardContent className="py-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Your {stock.symbol} Balance</span>
+                      <div className="text-right">
+                        {tokenBalanceLoading ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 border-2 border-muted border-t-primary rounded-full animate-spin" />
+                            <span className="text-sm text-muted-foreground">Loading...</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className={`font-semibold ${tokenBalance === 0 ? 'text-muted-foreground' : 'text-primary'}`}>
+                              {tokenBalance !== null ? tokenBalance.toFixed(6) : '0.000000'} {stock.symbol}
+                            </div>
+                            {tokenBalance !== null && tokenBalance > 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                ≈ ${(tokenBalance * stock.price).toFixed(2)} USD
+                              </div>
+                            )}
+                            {tokenBalance === 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                No tokens to sell
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
@@ -561,32 +659,21 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
 
               {/* Current Price */}
               <Card className="bg-card border-border">
-                <CardContent className="pt-4">
+                <CardContent className="py-4">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Current Price</span>
-                    <div className="text-right">
-                      <div className="font-semibold text-foreground">${stock.price.toFixed(2)}</div>
+                    <div className="flex items-center gap-2">
                       <div className={`text-xs flex items-center gap-1 ${
                         stock.changePercent >= 0 ? 'text-primary' : 'text-destructive'
                       }`}>
                         {stock.changePercent >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                         {stock.changePercent.toFixed(2)}%
                       </div>
+                      <div className="font-semibold text-foreground">${stock.price.toFixed(2)}</div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-
-              {/* Info Banner */}
-              <div className="bg-card border border-border rounded-lg p-3">
-                <div className="text-sm text-muted-foreground">
-                  <strong className="text-foreground">Real Trading:</strong> Uses Jupiter's swap aggregator for on-chain trading on Solana mainnet.
-                  <br />
-                  <strong className="text-foreground">Wallet:</strong> {walletChainType === 'ethereum' ? 'Ethereum (USDC)' : 'Solana (SOL)'}
-                  <br />
-                  <strong className="text-foreground">Slippage:</strong> Set to 3% for better execution. {walletChainType === 'solana' ? 'Transactions require SOL for fees.' : 'USDC transactions supported.'}
-                </div>
-              </div>
 
               {/* Buy/Sell Tabs */}
               <Tabs value={side} onValueChange={(value) => setSide(value as "buy" | "sell")}>
@@ -608,15 +695,27 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                         : `Quantity to sell (${stock.symbol})`
                       }
                     </Label>
-                    <Input
-                      id="amount"
-                      type="number"
-                      placeholder={side === 'buy' ? (walletChainType === 'ethereum' ? "100" : "0.1") : "0.30"}
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      min="0"
-                      step={side === 'buy' ? "0.000001" : "0.000001"}
-                    />
+                    <div className="relative">
+                      <Input
+                        id="amount"
+                        type="text"
+                        placeholder={side === 'buy' ? (walletChainType === 'ethereum' ? "100" : "0.1") : "0.30"}
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        className={`${side === 'sell' ? 'pr-20' : ''} [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]`}
+                      />
+                      {side === 'sell' && tokenBalance !== null && tokenBalance > 0 && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="absolute right-1 top-1/2 -translate-y-1/2 h-8 px-2 text-xs bg-muted hover:bg-muted-foreground hover:text-background border-l border-border rounded-l-none"
+                          onClick={handleMaxSell}
+                        >
+                          Sell All
+                        </Button>
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground">
                       {side === 'buy' 
                         ? `Enter how much SOL you want to spend`
@@ -641,11 +740,21 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                           <>
                             <div className="flex justify-between">
                               <span>You pay:</span>
-                              <span>{parseFloat(amount).toFixed(4)} SOL</span>
+                              <span>
+                                {side === 'buy' 
+                                  ? `${parseFloat(amount).toFixed(4)} ${walletChainType === 'ethereum' ? 'USDC' : 'SOL'}`
+                                  : `${parseFloat(amount).toFixed(6)} ${stock.symbol}`
+                                }
+                              </span>
                             </div>
                             <div className="flex justify-between">
                               <span>You receive:</span>
-                              <span>{formatNumber(quote.outAmount, stock.address.startsWith('Pre') ? 9 : 8)} {stock.symbol}</span>
+                              <span>
+                                {side === 'buy'
+                                  ? `${formatNumber(quote.outAmount, stock.address.startsWith('Pre') ? 9 : 8)} ${stock.symbol}`
+                                  : `${formatNumber(quote.outAmount, 9)} ${walletChainType === 'ethereum' ? 'USDC' : 'SOL'}`
+                                }
+                              </span>
                             </div>
                             <div className="flex justify-between text-sm text-muted-foreground">
                               <span>Price Impact:</span>
@@ -691,7 +800,7 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                   })}
                   <Button
                     onClick={handleTrade}
-                    disabled={loading || !amount || parseFloat(amount) <= 0 || !connected || jupiterLoading || (solBalance !== null && solBalance < 0.01) || (side === 'buy' && solBalance !== null && parseFloat(amount) >= (solBalance - 0.01))}
+                    disabled={loading || !amount || parseFloat(amount) <= 0 || !connected || jupiterLoading || (solBalance !== null && solBalance < 0.01) || (side === 'buy' && solBalance !== null && parseFloat(amount) >= (solBalance - 0.01)) || (side === 'sell' && tokenBalance === 0)}
                     className={`w-full ${
                       side === "buy" 
                         ? "bg-green-600 hover:bg-green-700" 
@@ -707,6 +816,11 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                       <div className="flex items-center gap-2">
                         <Wallet className="w-4 h-4" />
                         Need more SOL for fees
+                      </div>
+                    ) : side === 'sell' && tokenBalance === 0 ? (
+                      <div className="flex items-center gap-2">
+                        <Coins className="w-4 h-4" />
+                        No {stock.symbol} to sell
                       </div>
                     ) : (
                       <>

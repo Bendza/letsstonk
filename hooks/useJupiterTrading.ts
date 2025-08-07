@@ -364,7 +364,7 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
     }
   }, [getQuote, executeSwap]);
 
-  // Sell xStock for USDC
+  // Sell xStock for SOL
   const sellXStock = useCallback(async (
     stockSymbol: string,
     stockAmount: number,
@@ -376,12 +376,12 @@ export const useJupiterTrading = (walletAddress?: string | null, sendTransaction
         throw new Error(`Stock ${stockSymbol} not found`);
       }
 
-      const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+      const SOL_MINT = 'So11111111111111111111111111111111111111112'; // Native SOL
       const amount = Math.floor(stockAmount * Math.pow(10, stockData.decimals || 6));
 
       const quote = await getQuote({
         inputMint: stockData.address,
-        outputMint: USDC_MINT,
+        outputMint: SOL_MINT,
         amount,
         slippageBps: 300 // 3% slippage for xStocks
       });
