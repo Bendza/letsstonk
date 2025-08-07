@@ -409,13 +409,13 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                 
                 <div className="flex-1">
                   <div className={`text-sm font-medium ${
-                    step.status === 'failed' ? 'text-red-600' : 'text-gray-900'
+                    step.status === 'failed' ? 'text-destructive' : 'text-foreground'
                   }`}>
                     {step.label}
                   </div>
                   {step.message && (
                     <div className={`text-xs ${
-                      step.status === 'failed' ? 'text-red-600' : 'text-gray-600'
+                      step.status === 'failed' ? 'text-destructive' : 'text-muted-foreground'
                     }`}>
                       {step.message}
                     </div>
@@ -426,7 +426,7 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                         href={`https://solscan.io/tx/${step.signature}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80"
                       >
                         View on Solscan 
                         <ExternalLink className="w-3 h-3" />
@@ -438,8 +438,8 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
             ))}
 
             {transactionError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <div className="text-red-800 text-sm">{transactionError}</div>
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+                <div className="text-destructive text-sm">{transactionError}</div>
               </div>
             )}
 
@@ -522,72 +522,6 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
             </div>
           )}
 
-                    {/* Debug Info */}
-          {isAuthenticated && (
-            <div className={`${isDemoMode ? 'bg-blue-50 border-blue-200' : 'bg-yellow-50 border-yellow-200'} border rounded-lg p-3 text-xs`}>
-              <div className={`font-medium ${isDemoMode ? 'text-blue-800' : 'text-yellow-800'} mb-1`}>
-                Debug Info {isDemoMode ? '(DEMO MODE)' : ''}:
-              </div>
-              <div className={`${isDemoMode ? 'text-blue-700' : 'text-yellow-700'} space-y-1`}>
-                <div>Mode: {isDemoMode ? 'Demo (No Privy App ID)' : 'Production'}</div>
-                <div>Wallet: {walletAddress ? `${walletAddress.slice(0, 8)}...${walletAddress.slice(-4)}` : 'None'}</div>
-                <div>Chain Type: {walletChainType || 'None'}</div>
-                <div>Wallet Type: {ethereumWallet ? 'Ethereum (Phantom)' : solanaWallet ? 'Solana' : 'None'}</div>
-                <div>Solana Wallet: {solanaWallet ? 'Found' : 'Missing'}</div>
-                <div>Ethereum Wallet: {ethereumWallet ? 'Found' : 'Missing'}</div>
-                <div>Connected: {connected ? 'Yes' : 'No'}</div>
-                <div>SendTx: {typeof sendTransaction === 'function' ? 'Available' : 'Missing'}</div>
-                <div>Stock: {stock.symbol} ({stock.address.slice(0, 8)}...)</div>
-                <div>Wallets Count: {allConnectedWallets?.length || 0}</div>
-              </div>
-              <div className="flex gap-2 mt-2">
-                <Button 
-                  onClick={async () => {
-                    console.log('[TEST] Testing Jupiter quote...')
-                    try {
-                      // Test with the correct wallet type
-                      const inputMint = walletChainType === 'ethereum' 
-                        ? 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' // USDC
-                        : 'So11111111111111111111111111111111111111112' // SOL
-                      const amount = walletChainType === 'ethereum' 
-                        ? 100000000 // 100 USDC (6 decimals)
-                        : 100000000 // 0.1 SOL (9 decimals)
-                      
-                      const testQuote = await getQuote({
-                        inputMint,
-                        outputMint: stock.address,
-                        amount,
-                        slippageBps: 300
-                      })
-                      console.log('[TEST] Jupiter quote result:', testQuote)
-                    } catch (error) {
-                      console.error('[TEST] Jupiter quote error:', error)
-                    }
-                  }}
-                  size="sm"
-                  className="text-xs h-6"
-                >
-                  Test Jupiter Quote ({walletChainType === 'ethereum' ? 'USDC' : 'SOL'})
-                </Button>
-                <Button 
-                  onClick={() => {
-                    console.log('[DEBUG] Wallet detection test:')
-                    console.log('- allConnectedWallets:', allConnectedWallets)
-                    console.log('- solanaWallet:', solanaWallet)
-                    console.log('- ethereumWallet:', ethereumWallet)
-                    console.log('- activeWallet:', activeWallet)
-                    console.log('- walletAddress:', walletAddress)
-                    console.log('- walletChainType:', walletChainType)
-                  }}
-                  size="sm"
-                  variant="outline"
-                  className="text-xs h-6"
-                >
-                  Debug Wallets
-                </Button>
-              </div>
-            </div>
-          )}
 
           {isAuthenticated && (
             <>
@@ -670,9 +604,9 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                       min="0"
                       step={side === 'buy' ? "0.000001" : "0.000001"}
                     />
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-muted-foreground">
                       {side === 'buy' 
-                        ? `Enter how much ${walletChainType === 'ethereum' ? 'USDC' : 'SOL'} you want to spend`
+                        ? `Enter how much SOL you want to spend`
                         : `Enter how many ${stock.symbol} tokens you want to sell`
                       }
                     </div>
@@ -686,74 +620,46 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                       </CardHeader>
                       <CardContent className="space-y-2">
                         {quoteLoading ? (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <div className="w-4 h-4 border-2 border-muted border-t-primary rounded-full animate-spin" />
                             Getting best price...
                           </div>
                         ) : quote ? (
                           <>
                             <div className="flex justify-between">
-                              <span>Input:</span>
-                              <span>{formatNumber(quote.inAmount, side === 'buy' ? (walletChainType === 'ethereum' ? 6 : 9) : 6)} {side === 'buy' ? (walletChainType === 'ethereum' ? 'USDC' : 'SOL') : stock.symbol}</span>
+                              <span>You pay:</span>
+                              <span>{formatNumber(quote.inAmount, 9)} SOL</span>
                             </div>
                             <div className="flex justify-between">
-                              <span>Output:</span>
-                              <span>{formatNumber(quote.outAmount, side === 'buy' ? 6 : (walletChainType === 'ethereum' ? 6 : 9))} {side === 'buy' ? stock.symbol : (walletChainType === 'ethereum' ? 'USDC' : 'SOL')}</span>
+                              <span>You receive:</span>
+                              <span>{formatNumber(quote.outAmount, 6)} {stock.symbol}</span>
                             </div>
-                            <div className="flex justify-between text-sm text-gray-600">
+                            <div className="flex justify-between text-sm text-muted-foreground">
                               <span>Price Impact:</span>
-                              <span className={parseFloat(quote.priceImpactPct) > 1 ? 'text-red-600' : 'text-green-600'}>
+                              <span className={parseFloat(quote.priceImpactPct) > 1 ? 'text-destructive' : 'text-primary'}>
                                 {parseFloat(quote.priceImpactPct).toFixed(4)}%
                               </span>
                             </div>
                           </>
                         ) : (
-                          <div className="text-sm text-gray-600">Unable to get quote</div>
+                          <div className="text-sm text-muted-foreground">Unable to get quote</div>
                         )}
                       </CardContent>
                     </Card>
                   )}
 
-                  {/* Order Summary */}
-                  {amount && !quote && (
+                  {/* Fallback when Jupiter quote fails */}
+                  {amount && !quote && !quoteLoading && (
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-base">Estimated Summary</CardTitle>
+                        <CardTitle className="text-base">Quote Unavailable</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-2">
-                        {side === 'buy' ? (
-                          <>
-                            <div className="flex justify-between">
-                              <span>{walletChainType === 'ethereum' ? 'USDC' : 'SOL'} to spend:</span>
-                              <span>{parseFloat(amount).toFixed(4)} {walletChainType === 'ethereum' ? 'USDC' : 'SOL'}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Stock price:</span>
-                              <span>${stock.price.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between font-semibold border-t pt-2">
-                              <span>Est. {stock.symbol} received:</span>
-                              <span>{(parseFloat(amount) / stock.price).toFixed(6)}</span>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="flex justify-between">
-                              <span>{stock.symbol} to sell:</span>
-                              <span>{parseFloat(amount).toFixed(6)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Stock price:</span>
-                              <span>${stock.price.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between font-semibold border-t pt-2">
-                              <span>Est. {walletChainType === 'ethereum' ? 'USDC' : 'SOL'} received:</span>
-                              <span>${(parseFloat(amount) * stock.price).toFixed(2)}</span>
-                            </div>
-                          </>
-                        )}
-                        <div className="text-xs text-gray-600 mt-2">
-                          * Actual amounts may vary based on Jupiter routing and slippage
+                        <div className="text-sm text-muted-foreground text-center py-4">
+                          <div className="mb-2">⚠️ Unable to get real-time quote</div>
+                          <div className="text-xs">
+                            Jupiter swap quote failed. Please check your connection or try again.
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -762,7 +668,7 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                   {/* Trade Button */}
                   <Button
                     onClick={handleTrade}
-                    disabled={loading || !amount || parseFloat(amount) <= 0 || !connected || jupiterLoading || (walletChainType === 'solana' && solBalance !== null && solBalance < 0.01) || (side === 'buy' && walletChainType === 'solana' && solBalance !== null && parseFloat(amount) >= solBalance)}
+                    disabled={loading || !amount || parseFloat(amount) <= 0 || !connected || jupiterLoading || (solBalance !== null && solBalance < 0.01) || (side === 'buy' && solBalance !== null && parseFloat(amount) >= (solBalance - 0.01))}
                     className={`w-full ${
                       side === "buy" 
                         ? "bg-green-600 hover:bg-green-700" 
@@ -774,7 +680,7 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                         Processing...
                       </div>
-                    ) : walletChainType === 'solana' && solBalance !== null && solBalance < 0.01 ? (
+                    ) : solBalance !== null && solBalance < 0.01 ? (
                       <div className="flex items-center gap-2">
                         <Wallet className="w-4 h-4" />
                         Need more SOL for fees
@@ -782,14 +688,14 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                     ) : (
                       <>
                         <Coins className="w-4 h-4 mr-2" />
-                        {side === "buy" ? "Buy" : "Sell"} {stock.symbol}
+                        {side === "buy" ? "Buy with SOL" : "Sell for SOL"} 
                       </>
                     )}
                   </Button>
 
                   {jupiterError && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                      <div className="text-red-800 text-sm">{jupiterError}</div>
+                    <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+                      <div className="text-destructive text-sm">{jupiterError}</div>
                     </div>
                   )}
                 </TabsContent>

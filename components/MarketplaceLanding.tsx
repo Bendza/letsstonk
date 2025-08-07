@@ -254,8 +254,8 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
         </div>
         
         {/* Content */}
-        <div className="relative container mx-auto px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center max-w-7xl mx-auto">
+        <div className="relative container mx-auto">
+          <div className="flex gap-8 mx-auto">
             {/* Logo Image - LEFT SIDE */}
             <div className="flex justify-center lg:justify-start order-2 lg:order-1">
               <div className="relative">
@@ -269,23 +269,23 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
             
             {/* Text Content - RIGHT SIDE */}
             <div className="text-center lg:text-left order-1 lg:order-2">
-              <div className="space-y-6">
+              <div className="space-y-6 text-center">
                 <Badge className="bg-primary/10 text-primary border-primary/20 px-3 py-1 text-sm font-medium">
                   Powered by Backed Finance & Solana
                 </Badge>
                 
-                <h1 className="text-3xl lg:text-5xl font-bold tracking-tight leading-tight">
+                <h1 className="text-3xl lg:text-5xl font-bold tracking-tight leading-tight text-center">
                   Tokenized Stock
                   <br />
                   <span className="text-primary">Trading Platform</span>
                 </h1>
                 
-                <p className="text-lg text-muted-foreground leading-relaxed max-w-xl">
+                <p className="text-lg text-muted-foreground leading-relaxed max-w-xl text-center">
                   Trade real S&P 500 stocks as tokens on Solana with professional portfolio management, 
                   24/7 trading, and instant settlement.
                 </p>
                 
-                <div className="flex flex-wrap items-center justify-center lg:justify-start gap-6 text-sm text-muted-foreground">
+                <div className="flex flex-wrap items-center justify-center lg:justify-center gap-6 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                     <span>Live Market Data</span>
@@ -302,6 +302,7 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
                 
      
               </div>
+              
             </div>
           </div>
         </div>
