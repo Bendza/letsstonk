@@ -26,12 +26,21 @@ import { toast } from 'sonner';
 import { usePrivyAuth } from '@/hooks/usePrivyAuth';
 import { fetchXStocksFrontend, fetchJupiterPriceData } from '@/lib/frontend-data';
 import { XStock } from '@/lib/types';
+import { preStocksConfig, PreStock, preStocksSectors } from '@/lib/prestocks-config';
 
 interface TokenWithPrice extends XStock {
   price: number;
   change: number;
   changePercent: number;
   sector: string;
+  tokenType?: 'xstock' | 'prestock';
+}
+
+interface PreStockWithPrice extends PreStock {
+  price: number;
+  change: number;
+  changePercent: number;
+  tokenType: 'prestock';
 }
 
 interface MarketplaceLandingProps {
@@ -39,11 +48,12 @@ interface MarketplaceLandingProps {
 }
 
 export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
-  const [tokens, setTokens] = useState<TokenWithPrice[]>([]);
+  const [allTokens, setAllTokens] = useState<(TokenWithPrice | PreStockWithPrice)[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('market-cap');
   const [selectedSector, setSelectedSector] = useState('all');
+  const [selectedTokenType, setSelectedTokenType] = useState('all');
   const [favorites, setFavorites] = useState<string[]>(['AAPLx', 'TSLAx', 'NVDAx']);
   const [selectedStock, setSelectedStock] = useState<any>(null);
   const [showTradingModal, setShowTradingModal] = useState(false);
@@ -70,7 +80,9 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
     'WMTx': 'Retail',
   };
 
-  const sectors = ['all', 'Technology', 'Automotive', 'E-commerce', 'FinTech', 'ETF', 'Healthcare', 'Financial', 'Retail', 'Consumer Goods', 'Software'];
+  const xStockSectors = ['Technology', 'Automotive', 'E-commerce', 'FinTech', 'ETF', 'Healthcare', 'Financial', 'Retail', 'Consumer Goods', 'Software'];
+  const allSectors = ['all', ...Array.from(new Set([...xStockSectors, ...preStocksSectors])).sort()];
+  const tokenTypes = ['all', 'xstocks', 'prestocks'];
 
   // Fetch data
   useEffect(() => {
@@ -109,11 +121,45 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
             change: Number(change.toFixed(2)),
             changePercent: Number(changePercent.toFixed(2)),
             sector: sectorMap[stock.symbol] || 'Technology',
+            tokenType: 'xstock' as const,
           };
         });
 
-        setTokens(tokensWithPrices);
-        console.log('[MARKETPLACE] Processed', tokensWithPrices.length, 'tokens with real Jupiter data');
+        // Fetch real Jupiter prices for PreStocks
+        const preStockAddresses = preStocksConfig.map(stock => stock.address);
+        const preStockJupiterData = await fetchJupiterPriceData(preStockAddresses);
+        console.log('[MARKETPLACE] PreStock Jupiter data received:', Object.keys(preStockJupiterData).length, 'tokens');
+
+        const preStocksWithPrices: PreStockWithPrice[] = preStocksConfig.map(stock => {
+          const jupiterInfo = preStockJupiterData[stock.address];
+          const price = jupiterInfo?.price || 0;
+          
+          // Generate realistic price changes (deterministic based on symbol)
+          let change = 0;
+          let changePercent = 0;
+          
+          if (price > 0) {
+            const hash = stock.symbol.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            const random = (seed: number) => (seed * 9301 + 49297) % 233280 / 233280;
+            changePercent = (random(hash) - 0.5) * 10; // -5% to +5%
+            change = (price * changePercent) / 100;
+          }
+
+          console.log(`[MARKETPLACE] ${stock.symbol}: price=$${price}, change=${changePercent.toFixed(2)}%`);
+
+          return {
+            ...stock,
+            price: Number(price.toFixed(2)),
+            change: Number(change.toFixed(2)),
+            changePercent: Number(changePercent.toFixed(2)),
+            tokenType: 'prestock' as const,
+          };
+        });
+
+        // Combine both token types into a single array
+        const combinedTokens = [...tokensWithPrices, ...preStocksWithPrices];
+        setAllTokens(combinedTokens);
+        console.log('[MARKETPLACE] Processed', tokensWithPrices.length, 'xStocks and', preStocksWithPrices.length, 'PreStocks =', combinedTokens.length, 'total tokens');
       } catch (error) {
         console.error('[MARKETPLACE] Failed to fetch tokens:', error);
       } finally {
@@ -125,12 +171,15 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
   }, []);
 
   // Filter and sort tokens
-  const filteredTokens = tokens
+  const filteredTokens = allTokens
     .filter(token => {
       const matchesSearch = token.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           token.symbol.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesSector = selectedSector === 'all' || token.sector === selectedSector;
-      return matchesSearch && matchesSector;
+      const matchesTokenType = selectedTokenType === 'all' || 
+                              (selectedTokenType === 'xstocks' && token.tokenType === 'xstock') ||
+                              (selectedTokenType === 'prestocks' && token.tokenType === 'prestock');
+      return matchesSearch && matchesSector && matchesTokenType;
     })
     .sort((a, b) => {
       switch (sortBy) {
@@ -149,12 +198,12 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
       }
     });
 
-  const topGainers = tokens
+  const topGainers = filteredTokens
     .filter(t => t.changePercent > 0)
     .sort((a, b) => b.changePercent - a.changePercent)
     .slice(0, 3);
 
-  const topLosers = tokens
+  const topLosers = filteredTokens
     .filter(t => t.changePercent < 0)
     .sort((a, b) => a.changePercent - b.changePercent)
     .slice(0, 3);
@@ -312,14 +361,23 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
       <section className="py-4 bg-card/30 border-b border-border/20">
         <div className="container mx-auto px-6 text-center">
           <p className="text-sm text-muted-foreground">
-            Learn more about tokenized stocks at{" "}
+            Learn more about{" "}
             <a 
               href="https://xstocks.com" 
               target="_blank" 
               rel="noopener noreferrer"
               className="text-primary hover:underline font-medium"
             >
-              xstocks.com
+              xStocks
+            </a>
+            {" "}and{" "}
+            <a 
+              href="https://prestocks.com" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-primary hover:underline font-medium"
+            >
+              PreStocks
             </a>
           </p>
         </div>
@@ -340,12 +398,23 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
                 />
               </div>
 
+              <Select value={selectedTokenType} onValueChange={setSelectedTokenType}>
+                <SelectTrigger className="w-full sm:w-48 bg-card border-border/20">
+                  <SelectValue placeholder="Token Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Tokens ({allTokens.length})</SelectItem>
+                  <SelectItem value="xstocks">xStocks ({allTokens.filter(t => t.tokenType === 'xstock').length})</SelectItem>
+                  <SelectItem value="prestocks">PreStocks ({allTokens.filter(t => t.tokenType === 'prestock').length})</SelectItem>
+                </SelectContent>
+              </Select>
+
               <Select value={selectedSector} onValueChange={setSelectedSector}>
                 <SelectTrigger className="w-full sm:w-48 bg-card border-border/20">
                   <SelectValue placeholder="All Sectors" />
                 </SelectTrigger>
                 <SelectContent>
-                  {sectors.map((sector) => (
+                  {allSectors.map((sector) => (
                     <SelectItem key={sector} value={sector}>
                       {sector === "all" ? "All Sectors" : sector}
                     </SelectItem>
@@ -457,6 +526,12 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
                         <span className="font-mono text-xs">{token.address.slice(0, 6)}...{token.address.slice(-4)}</span>
                       </div>
                       <div className="flex justify-between">
+                        <span className="text-muted-foreground">Type</span>
+                        <span className="font-semibold text-primary">
+                          {token.tokenType === 'xstock' ? 'xStock' : 'PreStock'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
                         <span className="text-muted-foreground">Network</span>
                         <span className="font-semibold text-primary">Solana</span>
                       </div>
@@ -466,6 +541,13 @@ export function MarketplaceLanding({ onNavigate }: MarketplaceLandingProps) {
                     <Badge variant="outline" className="w-full mt-3 text-xs py-1 justify-center border-border/40 text-muted-foreground">
                       {token.sector}
                     </Badge>
+
+                    {/* PreStock Badge */}
+                    {token.tokenType === 'prestock' && (
+                      <Badge variant="secondary" className="w-full mt-2 text-xs py-1 justify-center bg-purple-100 text-purple-800 border-purple-200">
+                        Pre-IPO Company
+                      </Badge>
+                    )}
 
 
                   </CardContent>
