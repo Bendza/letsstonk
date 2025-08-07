@@ -382,7 +382,7 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
   const getTokenDecimals = (tokenAddress: string) => {
     // Check if it's a PreStock (addresses start with 'Pre')
     if (tokenAddress.startsWith('Pre')) {
-      return 8  // PreStocks actually use 8 decimals (same as SPL standard)
+      return 9  // PreStocks need 9 decimals for proper calculation
     }
     // xStocks use 8 decimals
     return 8
@@ -591,10 +591,10 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
               {/* Buy/Sell Tabs */}
               <Tabs value={side} onValueChange={(value) => setSide(value as "buy" | "sell")}>
                 <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="buy" className="text-green-600 data-[state=active]:bg-green-50">
+                  <TabsTrigger value="buy" className="text-green-600 data-[state=active]:bg-green-100 data-[state=active]:text-green-700">
                     Buy
                   </TabsTrigger>
-                  <TabsTrigger value="sell" className="text-red-600 data-[state=active]:bg-red-50">
+                  <TabsTrigger value="sell" className="text-red-600 data-[state=active]:bg-red-100 data-[state=active]:text-red-700">
                     Sell
                   </TabsTrigger>
                 </TabsList>
@@ -645,7 +645,7 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                             </div>
                             <div className="flex justify-between">
                               <span>You receive:</span>
-                              <span>{formatNumber(quote.outAmount, stock.address.startsWith('Pre') ? 6 : 8)} {stock.symbol}</span>
+                              <span>{formatNumber(quote.outAmount, stock.address.startsWith('Pre') ? 9 : 8)} {stock.symbol}</span>
                             </div>
                             <div className="flex justify-between text-sm text-muted-foreground">
                               <span>Price Impact:</span>
@@ -679,6 +679,16 @@ export function TradingModal({ stock, open, onOpenChange }: TradingModalProps) {
                   )}
 
                   {/* Trade Button */}
+                  {console.log('[DEBUG] Button disabled conditions:', {
+                    loading,
+                    amount,
+                    amountValid: amount && parseFloat(amount) > 0,
+                    connected,
+                    jupiterLoading,
+                    solBalance,
+                    lowBalance: solBalance !== null && solBalance < 0.01,
+                    insufficientFunds: side === 'buy' && solBalance !== null && parseFloat(amount || '0') >= (solBalance - 0.01)
+                  })}
                   <Button
                     onClick={handleTrade}
                     disabled={loading || !amount || parseFloat(amount) <= 0 || !connected || jupiterLoading || (solBalance !== null && solBalance < 0.01) || (side === 'buy' && solBalance !== null && parseFloat(amount) >= (solBalance - 0.01))}
